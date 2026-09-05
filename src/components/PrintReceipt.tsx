@@ -7,13 +7,13 @@ import { Barcode128 } from './Barcode128';
 interface PrintReceiptProps { order: Order | null; settings: StoreSettings; }
 
 export const PrintReceipt: React.FC<PrintReceiptProps> = ({ order, settings }) => {
+  const memberCustomer = useMemo<Customer | null>(() => {
+    if (!order || settings.businessType !== 'barbershop' || !order.customerIsMember || !order.customerCode) return null;
+    try { return loadCustomers(order.merchantId || 'default_merchant').find((customer) => customer.customerCode === order.customerCode) || null; } catch { return null; }
+  }, [order, settings.businessType]);
   if (!order) return null;
   const formatRp = (num: number) => 'Rp ' + num.toLocaleString('id-ID');
   const cashier = order.shift === '1' ? settings.shift1Name : settings.shift2Name;
-  const memberCustomer = useMemo<Customer | null>(() => {
-    if (settings.businessType !== 'barbershop' || !order.customerIsMember || !order.customerCode) return null;
-    try { return loadCustomers(order.merchantId || 'default_merchant').find((customer) => customer.customerCode === order.customerCode) || null; } catch { return null; }
-  }, [order, settings.businessType]);
   const membershipBarcodeUrl = memberCustomer ? buildMembershipScanUrl(memberCustomer) : '';
 
   return <div id="print-receipt-portal" className="hidden print:block text-black bg-white">
