@@ -36,7 +36,7 @@ export function getExternalBarcodeUrl(value: string, width = 900, height = 240):
     format: 'png',
     width: String(width),
     height: String(height),
-    includeText: 'true',
+    includeText: 'false',
   });
   return `${QUICKCHART_BARCODE_ENDPOINT}?${params.toString()}`;
 }
@@ -48,7 +48,7 @@ export function getExternalBarcodeSvgUrl(value: string, width = 900, height = 24
     format: 'svg',
     width: String(width),
     height: String(height),
-    includeText: 'true',
+    includeText: 'false',
   });
   return `${QUICKCHART_BARCODE_ENDPOINT}?${params.toString()}`;
 }
