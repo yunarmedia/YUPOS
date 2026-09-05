@@ -32,7 +32,6 @@ async function findWritableCharacteristic(server: BluetoothRemoteGATTServer): Pr
     } catch { /* continue */ }
   }
 
-  // Some BLE printers expose a vendor-specific service/characteristic. Discover any writable GATT channel as fallback.
   try {
     const services = await server.getPrimaryServices();
     for (const service of services) {
@@ -57,6 +56,7 @@ async function connectDevice(device: BluetoothDevice): Promise<{ device: Bluetoo
   return { device, characteristic };
 }
 
+/** Open Chrome's native Web Bluetooth device chooser from the user's button click. */
 export async function requestBluetoothPrinter(): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
   if (!('bluetooth' in navigator)) {
     throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge pada perangkat yang mendukung Bluetooth BLE.');
@@ -65,20 +65,12 @@ export async function requestBluetoothPrinter(): Promise<{ device: BluetoothDevi
   const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined;
   if (!bluetooth) throw new Error('Bluetooth API tidak tersedia.');
 
-  // Chrome can reconnect to devices that the user has already authorized without asking for permission again.
-  if (bluetooth.getDevices) {
-    try {
-      const authorized = await bluetooth.getDevices();
-      if (authorized.length === 1) {
-        try { return await connectDevice(authorized[0]); } catch { /* fall through to device picker */ }
-      }
-    } catch { /* fall through to picker */ }
-  }
-
+  // Always open the chooser. Do not silently auto-connect to a previously authorized device.
   const device = await bluetooth.requestDevice({
     acceptAllDevices: true,
     optionalServices: OPTIONAL_SERVICES,
   });
+
   return connectDevice(device);
 }
 
@@ -96,7 +88,6 @@ export async function sendBluetoothData(characteristic: BluetoothRemoteGATTChara
   if (!characteristic) throw new Error('Characteristic printer tidak tersedia.');
   if (!characteristic.service.device.gatt?.connected) throw new Error('Printer Bluetooth tidak sedang terhubung.');
 
-  // Keep packets small for compatibility with low-cost BLE thermal printers and their negotiated MTU.
   const maxChunkSize = 180;
   for (let offset = 0; offset < data.length; offset += maxChunkSize) {
     const chunk = data.slice(offset, Math.min(offset + maxChunkSize, data.length));
@@ -123,19 +114,19 @@ export function buildReceiptEscPos(order: Order, settings: StoreSettings): Uint8
   const encoder = new TextEncoder();
   const safe = (value: unknown) => String(value ?? '').replace(/[\u0000-\u001F]/g, ' ').trim();
   const money = (value: number) => `Rp${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(value))}`;
-  const bytes: number[] = [0x1b, 0x40]; // ESC @ initialize
+  const bytes: number[] = [0x1b, 0x40];
   const text = (value: string) => bytes.push(...encoder.encode(value));
   const command = (...values: number[]) => bytes.push(...values);
 
-  command(0x1b, 0x61, 0x01); // center
-  command(0x1b, 0x45, 0x01); // bold
+  command(0x1b, 0x61, 0x01);
+  command(0x1b, 0x45, 0x01);
   text(safe(settings.storeName || 'YUPOS') + '\n');
   command(0x1b, 0x45, 0x00);
   if (settings.storeAddress) text(safe(settings.storeAddress) + '\n');
   if (settings.storePhone) text(safe(settings.storePhone) + '\n');
   text(line(width) + '\n');
 
-  command(0x1b, 0x61, 0x00); // left
+  command(0x1b, 0x61, 0x00);
   text(`No : ${safe(order.id)}\n`);
   text(`Tgl: ${safe(order.date)} ${safe(order.time)}\n`);
   text(`Kasir: ${safe(order.cashierName)}\n`);
@@ -160,7 +151,7 @@ export function buildReceiptEscPos(order: Order, settings: StoreSettings): Uint8
   command(0x1b, 0x61, 0x01);
   text(safe(settings.footer || 'Terima kasih') + '\n');
   text('Powered by YUPOS\n\n\n');
-  command(0x1d, 0x56, 0x00); // cut
+  command(0x1d, 0x56, 0x00);
 
   return new Uint8Array(bytes);
 }
