@@ -1,0 +1,6 @@
+{
+  "name": "YUPOS",
+  "description": "Aplikasi Kasir POS Multifungsi dengan Manajemen Produk dan Layanan, Cetak Struk, serta Laporan Omzet dan Pengeluaran.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
