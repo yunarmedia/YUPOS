@@ -1,4 +1,3 @@
-import QRCode from 'qrcode';
 import { Order, StoreSettings, Customer } from '../types';
 import { loadCustomers } from './customerService';
 import { buildMembershipScanUrl } from './membershipService';
