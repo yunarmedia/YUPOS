@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yupos-shell-v3';
+const CACHE_NAME = 'yupos-shell-v4';
 
 function appUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -10,6 +10,7 @@ const APP_SHELL = [
   appUrl('./manifest.webmanifest'),
   appUrl('./assets/icon-192.png'),
   appUrl('./assets/icon-512.png'),
+  appUrl('./assets/yupos-app-icon.png'),
   appUrl('./assets/yupos-loading-logo.png'),
 ];
 
@@ -36,14 +37,15 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Always prefer the network for the document and service-worker script.
-  // This prevents an installed PWA from serving an old JavaScript bundle
-  // after a new GitHub Pages deployment.
+  // Always prefer the network for HTML, manifest, icons and the service worker.
+  // This prevents GitHub Pages/PWA cache from keeping stale install metadata.
   const isNavigation = event.request.mode === 'navigate';
   const isAppDocument = url.pathname.endsWith('/index.html');
+  const isManifest = url.pathname.endsWith('/manifest.webmanifest');
   const isServiceWorker = url.pathname.endsWith('/sw.js');
+  const isAppIcon = /\/assets\/(icon-192|icon-512|yupos-app-icon)\.png$/.test(url.pathname);
 
-  if (isNavigation || isAppDocument || isServiceWorker) {
+  if (isNavigation || isAppDocument || isManifest || isServiceWorker || isAppIcon) {
     event.respondWith(
       fetch(event.request, { cache: 'no-store' })
         .then((response) => {
