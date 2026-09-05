@@ -56,7 +56,15 @@ async function connectDevice(device: BluetoothDevice): Promise<{ device: Bluetoo
   return { device, characteristic };
 }
 
-function showYuposBluetoothDialog(): Promise<boolean> {
+/**
+ * YUPOS-branded pre-dialog for the Bluetooth flow.
+ * Important: the native requestDevice() call must happen directly from the
+ * user's click handler. Resolving a Promise first can lose Chrome's user gesture.
+ */
+function showYuposBluetoothDialog(
+  openNativeChooser: () => Promise<BluetoothDevice>,
+  deviceType: 'kasir' | 'dapur',
+): Promise<BluetoothDevice | null> {
   return new Promise((resolve) => {
     const existing = document.getElementById('yupos-bluetooth-dialog');
     if (existing) existing.remove();
@@ -65,53 +73,104 @@ function showYuposBluetoothDialog(): Promise<boolean> {
     overlay.id = 'yupos-bluetooth-dialog';
     overlay.style.cssText = [
       'position:fixed', 'inset:0', 'z-index:2147483647', 'display:flex', 'align-items:center', 'justify-content:center',
-      'padding:20px', 'background:rgba(15,23,42,.58)', 'backdrop-filter:blur(8px)', '-webkit-backdrop-filter:blur(8px)',
+      'padding:18px', 'background:rgba(2,6,23,.64)', 'backdrop-filter:blur(10px)', '-webkit-backdrop-filter:blur(10px)',
       'font-family:Plus Jakarta Sans,Inter,system-ui,-apple-system,sans-serif'
     ].join(';');
 
+    const printerLabel = deviceType === 'dapur' ? 'Printer Dapur' : 'Printer Kasir';
     overlay.innerHTML = `
-      <div role="dialog" aria-modal="true" style="width:min(420px,100%);background:#fff;border:1px solid #dbe4f0;border-radius:24px;box-shadow:0 24px 70px rgba(15,23,42,.28);overflow:hidden">
-        <div style="padding:22px 22px 18px;background:linear-gradient(135deg,#eff6ff,#ffffff 60%);border-bottom:1px solid #e5e7eb">
-          <div style="display:flex;align-items:center;gap:12px">
-            <div style="width:48px;height:48px;border-radius:15px;background:#2563eb;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(37,99,235,.25)">
-              <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 5V2l5 5L7 17"/><path d="M4 9l8 8"/><path d="M4 15l8-8"/></svg>
+      <div role="dialog" aria-modal="true" aria-labelledby="yupos-bt-title" style="width:min(430px,100%);background:#fff;border:1px solid rgba(148,163,184,.22);border-radius:26px;box-shadow:0 28px 90px rgba(2,6,23,.34);overflow:hidden">
+        <div style="padding:24px 22px 20px;background:linear-gradient(145deg,#eff6ff 0%,#ffffff 68%);border-bottom:1px solid #e8eef6">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px">
+            <div style="width:52px;height:52px;flex:0 0 52px;border-radius:17px;background:linear-gradient(145deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px rgba(37,99,235,.26)">
+              <svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 5V2l5 5L7 17"/><path d="M4 9l8 8"/><path d="M4 15l8-8"/></svg>
             </div>
-            <div>
-              <div style="font-size:17px;font-weight:900;color:#0f172a;letter-spacing:-.02em">Hubungkan Printer Bluetooth</div>
-              <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:3px">YUPOS • Printer Kasir / Dapur</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:17px;line-height:1.25;font-weight:900;color:#0f172a;letter-spacing:-.025em" id="yupos-bt-title">Hubungkan Printer</div>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:6px;font-size:11px;font-weight:800;color:#64748b">
+                <span style="padding:4px 8px;border-radius:999px;background:#dbeafe;color:#1d4ed8">YUPOS</span>
+                <span>${printerLabel}</span>
+              </div>
             </div>
           </div>
         </div>
         <div style="padding:20px 22px 22px">
-          <div style="display:flex;gap:12px;padding:13px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:15px">
-            <div style="font-size:18px">📡</div>
-            <div style="font-size:12px;line-height:1.55;color:#475569;font-weight:600">YUPOS akan membuka pemilih perangkat Bluetooth untuk menemukan printer yang tersedia di sekitar perangkat Anda.</div>
+          <div style="display:flex;gap:12px;align-items:flex-start;padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px">
+            <div style="width:34px;height:34px;flex:0 0 34px;border-radius:11px;background:#e0ecff;display:flex;align-items:center;justify-content:center;color:#2563eb;font-size:16px">⌁</div>
+            <div>
+              <div style="font-size:12px;line-height:1.45;color:#1e293b;font-weight:850">Pilih perangkat Bluetooth</div>
+              <div style="margin-top:3px;font-size:11px;line-height:1.55;color:#64748b;font-weight:600">YUPOS akan membuka pemilih perangkat resmi Chrome untuk mencari printer di sekitar Anda.</div>
+            </div>
           </div>
-          <div style="margin-top:12px;font-size:11px;color:#94a3b8;font-weight:600">Gunakan printer Bluetooth <b style="color:#64748b">BLE / ESC-POS</b> dan pastikan printer menyala.</div>
-          <div style="display:flex;gap:10px;margin-top:20px">
-            <button id="yupos-bt-cancel" type="button" style="flex:1;padding:12px;border-radius:13px;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-size:12px;font-weight:800">Batal</button>
-            <button id="yupos-bt-continue" type="button" style="flex:1.35;padding:12px;border-radius:13px;border:0;background:#2563eb;color:white;font-size:12px;font-weight:900;box-shadow:0 8px 18px rgba(37,99,235,.22)">Pilih Printer Bluetooth</button>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:13px;font-size:10.5px;line-height:1.5;color:#94a3b8;font-weight:650">
+            <span style="width:6px;height:6px;border-radius:50%;background:#22c55e;display:inline-block"></span>
+            Printer harus menyala dan mendukung Bluetooth BLE / ESC-POS.
+          </div>
+          <div style="display:flex;gap:10px;margin-top:21px">
+            <button id="yupos-bt-cancel" type="button" style="flex:1;min-height:46px;padding:11px 12px;border-radius:14px;border:1px solid #dbe3ee;background:#f8fafc;color:#475569;font-size:12px;font-weight:850">Batal</button>
+            <button id="yupos-bt-continue" type="button" style="flex:1.45;min-height:46px;padding:11px 14px;border-radius:14px;border:0;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-size:12px;font-weight:900;box-shadow:0 9px 22px rgba(37,99,235,.24)">Pilih Printer Bluetooth</button>
           </div>
         </div>
       </div>
     `;
 
-    const cleanup = (value: boolean) => {
+    const cancel = () => {
       overlay.remove();
-      resolve(value);
+      resolve(null);
     };
 
+    const continueButton = overlay.querySelector<HTMLButtonElement>('#yupos-bt-continue');
+    const cancelButton = overlay.querySelector<HTMLButtonElement>('#yupos-bt-cancel');
+
     overlay.addEventListener('click', (event) => {
-      if (event.target === overlay) cleanup(false);
+      if (event.target === overlay) cancel();
     });
-    overlay.querySelector('#yupos-bt-cancel')?.addEventListener('click', () => cleanup(false));
-    overlay.querySelector('#yupos-bt-continue')?.addEventListener('click', () => cleanup(true));
+    cancelButton?.addEventListener('click', cancel);
+    continueButton?.addEventListener('click', async () => {
+      if (!continueButton) return;
+      continueButton.disabled = true;
+      cancelButton?.setAttribute('disabled', 'true');
+      continueButton.style.opacity = '.72';
+      continueButton.innerHTML = `
+        <span style="display:inline-flex;align-items:center;justify-content:center;gap:8px">
+          <span style="width:13px;height:13px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;display:inline-block;animation:yuposBtSpin .7s linear infinite"></span>
+          Membuka Bluetooth...
+        </span>
+      `;
+
+      try {
+        // This is intentionally the first awaited API after the user's click.
+        const device = await openNativeChooser();
+        overlay.remove();
+        resolve(device);
+      } catch (error) {
+        // Keep the YUPOS dialog in control if Chrome chooser is cancelled/blocked.
+        continueButton.disabled = false;
+        cancelButton?.removeAttribute('disabled');
+        continueButton.style.opacity = '1';
+        continueButton.textContent = 'Pilih Printer Bluetooth';
+        const message = error instanceof Error ? error.message : '';
+        if (message !== 'User cancelled' && !/cancel/i.test(message)) {
+          const note = document.createElement('div');
+          note.style.cssText = 'margin-top:10px;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:10.5px;font-weight:700;line-height:1.45';
+          note.textContent = 'Pemilih Bluetooth tidak dapat dibuka. Pastikan menggunakan Chrome HTTPS dan Bluetooth aktif.';
+          continueButton.parentElement?.before(note);
+        }
+      }
+    });
+
+    const style = document.createElement('style');
+    style.id = 'yupos-bt-dialog-style';
+    style.textContent = '@keyframes yuposBtSpin{to{transform:rotate(360deg)}}#yupos-bluetooth-dialog button{font-family:inherit;cursor:pointer;transition:transform .15s ease,opacity .15s ease,background .15s ease}#yupos-bluetooth-dialog button:not(:disabled):active{transform:scale(.98)}#yupos-bluetooth-dialog button:disabled{cursor:default}';
+    document.head.appendChild(style);
+    overlay.appendChild(style);
     document.body.appendChild(overlay);
+    continueButton?.focus();
   });
 }
 
-/** Open a YUPOS-styled confirmation first, then Chrome's required native Web Bluetooth chooser. */
-export async function requestBluetoothPrinter(): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
+/** Open the YUPOS-styled confirmation, then Chrome's required native device chooser. */
+export async function requestBluetoothPrinter(deviceType: 'kasir' | 'dapur' = 'kasir'): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
   if (!('bluetooth' in navigator)) {
     throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge pada perangkat yang mendukung Bluetooth BLE.');
   }
@@ -119,14 +178,11 @@ export async function requestBluetoothPrinter(): Promise<{ device: BluetoothDevi
   const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined;
   if (!bluetooth) throw new Error('Bluetooth API tidak tersedia.');
 
-  const shouldContinue = await showYuposBluetoothDialog();
-  if (!shouldContinue) throw new Error('User cancelled');
-
-  // Must be called from the user's button flow; Chrome owns the actual device chooser UI.
-  const device = await bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: OPTIONAL_SERVICES,
-  });
+  const device = await showYuposBluetoothDialog(
+    () => bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES }),
+    deviceType,
+  );
+  if (!device) throw new Error('User cancelled');
 
   return connectDevice(device);
 }
