@@ -46,6 +46,7 @@ body,
 body {
   background: var(--yupos-surface);
   overscroll-behavior: none;
+  overflow-x: hidden;
 }
 
 button,
@@ -53,6 +54,106 @@ input,
 select,
 textarea {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Global responsive shell fix for page views such as Customers and Extract Data. */
+.max-w-7xl {
+  width: 100%;
+  max-width: 80rem;
+  min-width: 0;
+  box-sizing: border-box;
+  flex: 1 1 0%;
+  min-height: 0;
+  height: auto;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.max-w-7xl > * {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Keep wide data tables usable without allowing the whole page to overflow. */
+.max-w-7xl table {
+  box-sizing: border-box;
+}
+
+.max-w-7xl [class*="overflow-auto"] {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 767px) {
+  .max-w-7xl {
+    width: 100%;
+    max-width: 100%;
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    gap: 1rem;
+  }
+
+  /* Header/banner content must wrap instead of forcing horizontal page width. */
+  .max-w-7xl h1,
+  .max-w-7xl h2,
+  .max-w-7xl h3,
+  .max-w-7xl h4,
+  .max-w-7xl p,
+  .max-w-7xl span,
+  .max-w-7xl button {
+    max-width: 100%;
+  }
+
+  .max-w-7xl input,
+  .max-w-7xl select,
+  .max-w-7xl textarea {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Extract Data: compact mobile controls and single-column navigation. */
+  .max-w-7xl .grid.grid-cols-2.lg\:grid-cols-4 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Customer KPI cards become one column so no card is pushed outside the viewport. */
+  .max-w-7xl .grid.grid-cols-2.lg\:grid-cols-4 {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  /* Date controls wrap cleanly on narrow screens. */
+  .max-w-7xl [class*="flex-wrap"] {
+    min-width: 0;
+  }
+
+  .max-w-7xl [class*="ml-auto"] {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  /* Wide tables stay horizontally scrollable inside their own card. */
+  .max-w-7xl table {
+    min-width: max-content;
+  }
+
+  /* Customer list retains both horizontal and vertical scrolling. */
+  .max-w-7xl table.min-w-\[980px\] {
+    min-width: 980px;
+  }
+}
+
+@media (min-width: 768px) {
+  .max-w-7xl {
+    scrollbar-gutter: stable;
+  }
 }
 
 @keyframes yupos-logo-in {
