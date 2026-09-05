@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yupos-shell-v4';
+const CACHE_NAME = 'yupos-shell-v5';
 
 function appUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -37,8 +37,6 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Always prefer the network for HTML, manifest, icons and the service worker.
-  // This prevents GitHub Pages/PWA cache from keeping stale install metadata.
   const isNavigation = event.request.mode === 'navigate';
   const isAppDocument = url.pathname.endsWith('/index.html');
   const isManifest = url.pathname.endsWith('/manifest.webmanifest');
@@ -60,7 +58,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static hashed Vite assets can remain cache-first; new builds receive new URLs.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
