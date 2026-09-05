@@ -1,486 +1,77 @@
 import React, { useState } from 'react';
-import { 
-  signInWithEmailAndPassword, 
-  sendPasswordResetEmail 
-} from 'firebase/auth';
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { MerchantUser } from '../types';
-import { 
-  Lock, 
-  Mail, 
-  Store, 
-  Eye, 
-  EyeOff, 
-  AlertCircle, 
-  CheckCircle2, 
-  ArrowRight,
-  ShieldCheck,
-  Smartphone,
-  Laptop,
-  Check,
-  MessageCircle,
-  HelpCircle,
-  ArrowLeft
-} from 'lucide-react';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, CheckCircle2, Eye, EyeOff, KeyRound, LockKeyhole, Mail, MessageCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { YuposLogo } from './YuposLogo';
 
-interface MerchantLoginProps {
-  onLoginSuccess: (user: MerchantUser) => void;
-}
+interface MerchantLoginProps { onLoginSuccess: (user: MerchantUser) => void; }
+const VIDEO_URL = 'https://videotourl.com/videos/1788611619946-72d41d3a-82ac-43d2-88f0-45ca519d71f3.mp4';
+const WA_LINK = 'https://wa.me/6283842590642?text=Halo%20Developer%20YUPOS,%20saya%20tertarik%20untuk%20membeli%20dan%20mengaktifkan%20lisensi%20penuh%20aplikasi%20kasir%20YUPOS.';
 
 export const MerchantLogin: React.FC<MerchantLoginProps> = ({ onLoginSuccess }) => {
-  // 'login' | 'purchase' | 'forgot'
   const [currentView, setCurrentView] = useState<'login' | 'purchase' | 'forgot'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [resetEmail, setResetEmail] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [showFullAccessOffer, setShowFullAccessOffer] = useState(false);
+  const [email, setEmail] = useState(''); const [password, setPassword] = useState(''); const [resetEmail, setResetEmail] = useState('');
+  const [showPassword, setShowPassword] = useState(false); const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null); const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const clearMessages = () => { setErrorMessage(null); setSuccessMessage(null); };
+  const switchView = (view: 'login' | 'purchase' | 'forgot') => { setCurrentView(view); clearMessages(); if (view === 'forgot') setResetEmail(email.trim()); };
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMessage(null);
-    setSuccessMessage(null);
-
-    if (!email.trim() || !password) {
-      setErrorMessage('Harap masukkan email dan kata sandi merchant Anda!');
-      return;
-    }
-
+    e.preventDefault(); clearMessages(); const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) { setErrorMessage('Masukkan email dan kata sandi akun merchant Anda.'); return; }
     setLoading(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const user = userCredential.user;
-      const merchantData: MerchantUser = {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email?.split('@')[0] || 'Merchant',
-      };
-      
-      // Save session locally so user never has to re-login unless manually logged out
-      try {
-        localStorage.setItem('yupos_merchant_session', JSON.stringify(merchantData));
-      } catch (e) {
-        console.warn('Session save notice:', e);
-      }
-
-      onLoginSuccess(merchantData);
+      const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password); const user = credential.user;
+      onLoginSuccess({ uid: user.uid, email: user.email, displayName: user.displayName || user.email?.split('@')[0] || 'Merchant' });
     } catch (err: any) {
-      console.warn('Login verification notice:', err);
-      let msg = 'Gagal masuk. Periksa kembali email dan kata sandi Anda.';
-      if (
-        err.code === 'auth/invalid-credential' || 
-        err.code === 'auth/wrong-password' || 
-        err.code === 'auth/user-not-found'
-      ) {
-        msg = 'Email atau kata sandi tidak cocok dengan akun terdaftar. Pastikan akun resmi sudah aktif.';
-      } else if (err.code === 'auth/invalid-email') {
-        msg = 'Format alamat email tidak valid (contoh: toko@gmail.com).';
-      } else if (err.code === 'auth/network-request-failed') {
-        msg = 'Koneksi jaringan internet terputus. Mohon periksa kembali koneksi Anda.';
-      } else if (err.code === 'auth/too-many-requests') {
-        msg = 'Terlalu banyak percobaan masuk. Mohon tunggu beberapa saat sebelum mencoba lagi.';
-      }
-      setErrorMessage(msg);
-    } finally {
-      setLoading(false);
-    }
+      const code = String(err?.code || '');
+      if (code === 'auth/invalid-email') setErrorMessage('Format email tidak valid.');
+      else if (code === 'auth/too-many-requests') setErrorMessage('Terlalu banyak percobaan. Tunggu beberapa saat lalu coba lagi.');
+      else if (code === 'auth/network-request-failed') setErrorMessage('Koneksi internet bermasalah. Periksa jaringan Anda.');
+      else setErrorMessage('Email atau kata sandi tidak cocok dengan akun merchant resmi YUPOS.');
+    } finally { setLoading(false); }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const targetEmail = resetEmail.trim() || email.trim();
-    if (!targetEmail) {
-      setErrorMessage('Harap masukkan alamat email akun merchant Anda!');
-      return;
-    }
-
+    e.preventDefault(); clearMessages(); const targetEmail = resetEmail.trim().toLowerCase();
+    if (!targetEmail) { setErrorMessage('Masukkan email yang sudah didaftarkan oleh developer YUPOS.'); return; }
     setLoading(true);
-    setErrorMessage(null);
-    setSuccessMessage(null);
-    setShowFullAccessOffer(false);
-
     try {
+      // This never creates a Firebase user. It only invokes Firebase Auth password recovery.
       await sendPasswordResetEmail(auth, targetEmail);
-      setSuccessMessage(
-        `Kode rahasia dan petunjuk pemulihan kata sandi telah berhasil dikirimkan ke email ${targetEmail}. Silakan cek Kotak Masuk (Inbox) atau folder Spam di Gmail Anda.`
-      );
+      setSuccessMessage('Tautan reset kata sandi telah dikirim. Periksa Inbox/Spam email terdaftar Anda.');
     } catch (err: any) {
-      console.warn('Reset password error:', err);
-      let msg = 'Gagal mengirim instruksi reset kata sandi. Pastikan email Anda sudah terdaftar.';
-      if (err.code === 'auth/invalid-email') {
-        msg = 'Format alamat email tidak valid.';
-      } else if (err.code === 'auth/user-not-found') {
-        msg = 'Email tersebut belum terdaftar di akun merchant resmi YUPOS.';
-        setShowFullAccessOffer(true);
-      } else if (err.code === 'auth/too-many-requests') {
-        msg = 'Terlalu banyak permintaan reset. Silakan coba lagi beberapa saat kemudian.';
-      } else if (err.code === 'auth/network-request-failed') {
-        msg = 'Koneksi internet bermasalah. Periksa jaringan lalu coba lagi.';
-      }
-      setErrorMessage(msg);
-    } finally {
-      setLoading(false);
-    }
+      const code = String(err?.code || '');
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') setErrorMessage('Email belum terdaftar sebagai akun merchant YUPOS. Pendaftaran akun hanya dilakukan oleh developer.');
+      else if (code === 'auth/invalid-email') setErrorMessage('Format email tidak valid.');
+      else if (code === 'auth/too-many-requests') setErrorMessage('Terlalu banyak permintaan reset. Tunggu beberapa saat lalu coba lagi.');
+      else if (code === 'auth/network-request-failed') setErrorMessage('Koneksi internet bermasalah. Periksa jaringan lalu coba lagi.');
+      else setErrorMessage('Email tersebut tidak dapat digunakan untuk pemulihan. Pastikan akun sudah didaftarkan oleh developer.');
+    } finally { setLoading(false); }
   };
 
-  const waLink = "https://wa.me/6283842590642?text=Halo%20Developer%20YUPOS,%20saya%20tertarik%20untuk%20membeli%20dan%20mengaktifkan%20lisensi%20penuh%20aplikasi%20kasir%20YUPOS.";
+  const Field = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => <div className="relative flex items-center"><div className="pointer-events-none absolute left-4 text-slate-400">{icon}</div>{children}</div>;
+  const AlertBox = () => <>{errorMessage && <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-semibold text-red-700"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><span>{errorMessage}</span></div>}{successMessage && <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /><span>{successMessage}</span></div>}</>;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-3 sm:p-6 overflow-y-auto">
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto transition-all animate-in fade-in zoom-in-95 duration-200">
-        {/* Brand Header */}
-        <div className="bg-gradient-to-r from-red-600 via-red-700 to-rose-800 p-5 sm:p-6 text-white text-center relative">
-          <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-white/10 shadow-xl ring-1 ring-white/10">
-            <img src="/assets/icon-192.png" alt="YUPOS" className="h-full w-full object-cover" />
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight">One Pos For Everything</h1>
-          <p className="text-blue-100 text-xs font-semibold mt-1">
-            YUPOS • Sistem POS premium untuk berbagai bidang usaha
-          </p>
-          <div className="mt-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/20 text-[10px] sm:text-[11px] font-bold text-blue-100 border border-white/10">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            Sistem Kasir Cloud Terenkripsi
-          </div>
-        </div>
-
-        {/* Top Navigation Tabs */}
-        {currentView !== 'forgot' && (
-          <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-bold">
-            <button
-              type="button"
-              className={`flex-1 py-3 text-center transition-all ${
-                currentView === 'login'
-                  ? 'bg-white text-blue-600 border-b-2 border-blue-600 font-extrabold shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-              onClick={() => {
-                setCurrentView('login');
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
-            >
-              Masuk Kasir
-            </button>
-            <button
-              type="button"
-              className={`flex-1 py-3 text-center transition-all ${
-                currentView === 'purchase'
-                  ? 'bg-white text-blue-600 border-b-2 border-blue-600 font-extrabold shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-              onClick={() => {
-                setCurrentView('purchase');
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
-            >
-              Daftar / Beli Lisensi
-            </button>
-          </div>
-        )}
-
-        {/* VIEW 1: LOGIN */}
-        {currentView === 'login' && (
-          <form onSubmit={handleLogin} className="p-5 sm:p-6 space-y-4">
-            {errorMessage && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-blue-700 font-bold flex items-start gap-2.5 leading-relaxed">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                <div className="flex-1">{errorMessage}</div>
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-bold flex items-start gap-2.5 leading-relaxed">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                <div className="flex-1">{successMessage}</div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Email Akun Merchant
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="contoh: merchant@gmail.com"
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-1.5">
-                <label className="block text-xs font-bold text-slate-700">
-                  Kata Sandi (Password)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setResetEmail(email);
-                    setErrorMessage(null);
-                    setSuccessMessage(null);
-                    setCurrentView('forgot');
-                  }}
-                  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline"
-                >
-                  Lupa kata sandi?
-                </button>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Masukkan kata sandi..."
-                  className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <span>Memverifikasi Akun...</span>
-              ) : (
-                <>
-                  <span>Buka Aplikasi Kasir</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-
-            <div className="pt-2 text-center">
-              <p className="text-[11px] text-slate-500">
-                Belum memiliki akun resmi kasir YuPOS?{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentView('purchase');
-                    setErrorMessage(null);
-                  }}
-                  className="text-blue-600 font-extrabold hover:underline"
-                >
-                  Daftar & Beli Lisensi
-                </button>
-              </p>
-            </div>
-          </form>
-        )}
-
-        {/* VIEW 2: PURCHASE / REGISTRATION PAGE (Strictly No Direct Register) */}
-        {currentView === 'purchase' && (
-          <div className="p-5 sm:p-6 space-y-4">
-            <div className="text-center space-y-1">
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-50 text-blue-600 text-[10px] font-black uppercase tracking-wider border border-red-200">
-                Lisensi Penuh / Lifetime Access
-              </span>
-              <h2 className="text-base sm:text-lg font-black text-slate-900">
-                Dapatkan Aplikasi Penuh YuPOS
-              </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                Pendaftaran merchant baru memerlukan aktivasi lisensi resmi dari developer.
-              </p>
-            </div>
-
-            {/* Feature Highlights */}
-            <div className="space-y-2 py-2">
-              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Check className="w-3 h-3 stroke-3" />
-                </div>
-                <span>Akses Fitur Lengkap Tanpa Batas Waktu</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Smartphone className="w-3 h-3 stroke-3" />
-                </div>
-                <span>Mendukung HP, Tablet, Laptop, & PC Komputer</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Check className="w-3 h-3 stroke-3" />
-                </div>
-                <span>Cetak Struk Bluetooth & Laporan Kas Laci Harian</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                  <Check className="w-3 h-3 stroke-3" />
-                </div>
-                <span>Tersimpan Otomatis & Data Bisnis Aman</span>
-              </div>
-            </div>
-
-            {/* WhatsApp Developer CTA Button */}
-            <div className="pt-1 space-y-2.5">
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl font-black text-xs sm:text-sm shadow-md shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all"
-              >
-                <MessageCircle className="w-4 h-4 fill-white text-emerald-600" />
-                <span>Hubungi Developer via WhatsApp</span>
-              </a>
-
-              <div className="text-center">
-                <p className="text-[11px] font-bold text-slate-600">
-                  Nomor WhatsApp:{' '}
-                  <span className="text-emerald-700 font-extrabold select-all">
-                    0838-4259-0642
-                  </span>
-                </p>
-                <p className="text-[10px] text-slate-400 mt-1 leading-snug">
-                  Setelah verifikasi pembelian, Anda akan langsung diberikan akun resmi untuk masuk ke aplikasi.
-                </p>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t border-slate-100 text-center">
-              <button
-                type="button"
-                onClick={() => setCurrentView('login')}
-                className="text-xs font-extrabold text-blue-600 hover:underline inline-flex items-center gap-1"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                Sudah memiliki lisensi akun resmi? Masuk di sini
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* VIEW 3: FORGOT PASSWORD (Secret Reset Code to Email) */}
-        {currentView === 'forgot' && (
-          <form onSubmit={handleResetPassword} className="p-5 sm:p-6 space-y-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentView('login');
-                  setErrorMessage(null);
-                  setSuccessMessage(null);
-                }}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <h2 className="text-sm font-extrabold text-slate-900">
-                Atur Ulang Kata Sandi
-              </h2>
-            </div>
-
-            <p className="text-xs text-slate-500 font-medium leading-relaxed">
-              Masukkan alamat email akun merchant Anda. Kami akan mengirimkan tautan kode rahasia ke kotak masuk Anda untuk membuat kata sandi baru.
-            </p>
-
-            {errorMessage && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-blue-700 font-bold flex items-start gap-2.5 leading-relaxed">
-                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                <div className="flex-1">{errorMessage}</div>
-              </div>
-            )}
-
-            {showFullAccessOffer && (
-              <div className="rounded-2xl border border-yellow-300 bg-yellow-50 p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-yellow-300 text-blue-950 font-black">Y</div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-black text-blue-950">Akun belum terdaftar</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-slate-600">Reset password hanya tersedia untuk email yang sudah memiliki akun merchant resmi di Firebase. Untuk mendapatkan akses penuh YUPOS, hubungi developer.</p>
-                    <a
-                      href={waLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2.5 text-[11px] font-black text-white shadow-md shadow-blue-600/20 transition hover:bg-blue-700"
-                    >
-                      <MessageCircle className="h-4 w-4" />
-                      Hubungi Developer untuk Akses Penuh
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-semibold flex items-start gap-2.5 leading-relaxed">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="flex-1">{successMessage}</div>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Alamat Email Terdaftar
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
-                <input
-                  type="email"
-                  required
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="contoh: merchant@gmail.com"
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white rounded-xl font-extrabold text-xs sm:text-sm shadow-md shadow-blue-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-            >
-              {loading ? (
-                <span>Mengirim Kode Rahasia...</span>
-              ) : (
-                <>
-                  <span>Kirim Kode Rahasia Reset Sandi</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-
-            <div className="text-center pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentView('login');
-                  setErrorMessage(null);
-                  setSuccessMessage(null);
-                }}
-                className="text-xs font-bold text-slate-500 hover:text-slate-800"
-              >
-                Kembali ke Halaman Masuk
-              </button>
-            </div>
-          </form>
-        )}
+  return <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950">
+    <video className="absolute inset-0 h-full w-full object-cover" src={VIDEO_URL} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" />
+    <div className="absolute inset-0 bg-slate-950/70" /><div className="absolute inset-0 bg-gradient-to-br from-blue-950/85 via-blue-900/55 to-slate-950/80" />
+    <div className="relative z-10 flex min-h-full items-center justify-center px-4 py-8 sm:px-6 lg:px-8">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-[32px] border border-white/15 bg-white/95 shadow-[0_30px_100px_rgba(0,0,0,.45)] backdrop-blur-xl lg:grid-cols-[.92fr_1.08fr]">
+        <section className="hidden min-h-[640px] flex-col justify-between bg-gradient-to-br from-blue-700 via-blue-600 to-blue-950 p-8 text-white lg:flex xl:p-10">
+          <div><YuposLogo size={62} showWordmark /><div className="mt-16 max-w-md"><div className="mb-5 inline-flex items-center gap-2 rounded-full border border-yellow-300/30 bg-yellow-300/10 px-3 py-1.5 text-xs font-black text-yellow-200"><Sparkles className="h-3.5 w-3.5" /> PREMIUM CASHIER PLATFORM</div><h1 className="text-4xl font-black leading-[1.08] tracking-tight xl:text-5xl">Satu POS untuk seluruh operasional bisnis.</h1><p className="mt-5 text-sm font-medium leading-7 text-blue-100">Kelola transaksi, produk, customer, kas, laporan, karyawan, dan printer dari satu sistem untuk berbagai jenis usaha.</p></div><div className="mt-10 grid grid-cols-2 gap-3">{[['Cloud Data','Sinkron & terisolasi'],['Multi Device','HP sampai PC'],['Bluetooth','Printer thermal'],['Secure','Firebase Auth']].map(([title,desc]) => <div key={title} className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur"><div className="text-sm font-black">{title}</div><div className="mt-1 text-[11px] text-blue-100">{desc}</div></div>)}</div></div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-blue-100"><ShieldCheck className="h-4 w-4 text-yellow-300" /> Akses merchant dikelola melalui Firebase Authentication.</div>
+        </section>
+        <section className="flex min-h-[600px] flex-col bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-8"><YuposLogo size={42} showWordmark darkText /><div className="hidden items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-[10px] font-black text-blue-700 sm:flex"><ShieldCheck className="h-3.5 w-3.5" /> SECURE ACCESS</div></div>
+          {currentView !== 'forgot' && <div className="grid grid-cols-2 border-b border-slate-200"><button type="button" onClick={() => switchView('login')} className={`px-4 py-4 text-sm font-black transition ${currentView === 'login' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-400 hover:text-slate-700'}`}>Masuk</button><button type="button" onClick={() => switchView('purchase')} className={`px-4 py-4 text-sm font-black transition ${currentView === 'purchase' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-400 hover:text-slate-700'}`}>Beli Lisensi</button></div>}
+          {currentView === 'login' && <form onSubmit={handleLogin} className="flex flex-1 flex-col justify-center p-6 sm:p-8"><div className="mb-7"><div className="mb-2 text-xs font-black uppercase tracking-[.16em] text-yellow-600">MERCHANT PORTAL</div><h2 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">Masuk ke YUPOS</h2><p className="mt-2 text-sm text-slate-500">Gunakan akun merchant yang telah didaftarkan oleh developer.</p></div><div className="space-y-4"><AlertBox /><div><label className="mb-2 block text-xs font-black text-slate-700">EMAIL MERCHANT</label><Field icon={<Mail className="h-5 w-5" />}><input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="merchant@gmail.com" className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" /></Field></div><div><div className="mb-2 flex items-center justify-between"><label className="text-xs font-black text-slate-700">KATA SANDI</label><button type="button" onClick={() => switchView('forgot')} className="text-xs font-black text-blue-600 hover:text-blue-800">Lupa sandi?</button></div><Field icon={<LockKeyhole className="h-5 w-5" />}><input type={showPassword ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Masukkan kata sandi" className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-12 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" /><button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-3 rounded-xl p-2 text-slate-400 hover:bg-slate-100">{showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}</button></Field></div><button type="submit" disabled={loading} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-60">{loading ? 'Memverifikasi akun...' : <>Buka Aplikasi Kasir <ArrowRight className="h-5 w-5" /></>}</button></div><div className="mt-7 rounded-2xl border border-yellow-200 bg-yellow-50 p-4"><div className="flex gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-yellow-600" /><div><div className="text-xs font-black text-slate-900">Akun resmi YUPOS</div><div className="mt-1 text-[11px] leading-5 text-slate-600">Tidak ada pendaftaran otomatis. Akun hanya dibuat oleh developer melalui Firebase Authentication.</div></div></div></div></form>}
+          {currentView === 'forgot' && <form onSubmit={handleResetPassword} className="flex flex-1 flex-col justify-center p-6 sm:p-8"><button type="button" onClick={() => switchView('login')} className="mb-7 flex w-fit items-center gap-2 text-xs font-black text-slate-500 hover:text-blue-600"><ArrowLeft className="h-4 w-4" /> Kembali ke masuk</button><div className="mb-7"><div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600"><KeyRound className="h-6 w-6" /></div><h2 className="text-2xl font-black tracking-tight text-slate-950">Pulihkan kata sandi</h2><p className="mt-2 text-sm leading-6 text-slate-500">Masukkan email yang sudah didaftarkan oleh developer. Email yang belum memiliki akun Firebase tidak dapat melakukan reset.</p></div><div className="space-y-4"><AlertBox /><div><label className="mb-2 block text-xs font-black text-slate-700">EMAIL TERDAFTAR</label><Field icon={<Mail className="h-5 w-5" />}><input type="email" autoComplete="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="merchant@gmail.com" className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3.5 pl-12 pr-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100" /></Field></div><button type="submit" disabled={loading} className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700 disabled:opacity-60">{loading ? 'Memproses...' : <>Kirim Tautan Reset <ArrowRight className="h-5 w-5" /></>}</button></div><div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[11px] leading-5 text-slate-600"><b className="text-slate-900">Catatan:</b> Reset sandi tidak membuat akun baru. Jika email belum didaftarkan, hubungi developer untuk aktivasi akun.</div></form>}
+          {currentView === 'purchase' && <div className="flex flex-1 flex-col justify-center p-6 sm:p-8"><div className="mb-6"><div className="mb-2 text-xs font-black uppercase tracking-[.16em] text-yellow-600">FULL ACCESS</div><h2 className="text-2xl font-black tracking-tight text-slate-950">Aktifkan YUPOS untuk bisnis Anda</h2><p className="mt-2 text-sm leading-6 text-slate-500">Pendaftaran merchant dilakukan secara manual oleh developer. Tidak ada akun uji coba dan tidak ada registrasi otomatis.</p></div><div className="space-y-2.5">{['Fitur POS lengkap tanpa batas waktu','Mendukung HP, tablet, laptop, dan PC','Printer thermal Bluetooth','Data bisnis tersinkron dan terisolasi per merchant'].map((item) => <div key={item} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3.5 text-sm font-bold text-slate-700"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-yellow-100 text-yellow-700"><Check className="h-4 w-4" /></span>{item}</div>)}</div><a href={WA_LINK} target="_blank" rel="noopener noreferrer" className="mt-6 flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 py-4 text-sm font-black text-white shadow-lg shadow-blue-600/25 transition hover:bg-blue-700"><MessageCircle className="h-5 w-5" /> Hubungi Developer</a><button type="button" onClick={() => switchView('login')} className="mt-5 text-xs font-black text-slate-500 hover:text-blue-600">Sudah punya akun? Masuk ke YUPOS</button></div>}
+          <div className="border-t border-slate-100 px-6 py-4 text-center text-[10px] font-semibold text-slate-400 sm:px-8">YUPOS • One Pos For Everything • Secure Merchant Access</div>
+        </section>
       </div>
     </div>
-  );
+  </div>;
 };
