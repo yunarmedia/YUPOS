@@ -1,5 +1,6 @@
-import QRCode from 'qrcode';
 import { Order, StoreSettings } from '../types';
+import { drawCode128ToCanvas } from './barcodeService';
+import { fetchExternalOrLocalQrDataUrl, fetchImageAsDataUrl, getExternalBarcodeUrl } from './codeGeneratorService';
 
 export const BLE_PRINTER_PROFILES = [
   { name: 'Generic ESC/POS', service: '000018f0-0000-1000-8000-00805f9b34fb', characteristics: ['00002af1-0000-1000-8000-00805f9b34fb'] },
@@ -138,7 +139,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-function imageToEscPosRaster(source: HTMLCanvasElement, maxWidth: number): Uint8Array {
+function imageToEscPosRaster(source: HTMLCanvasElement, maxWidth: number, smooth = false): Uint8Array {
   const scale = Math.min(1, maxWidth / source.width);
   const width = Math.max(8, Math.floor(source.width * scale / 8) * 8);
   const height = Math.max(1, Math.round(source.height * scale));
@@ -149,7 +150,7 @@ function imageToEscPosRaster(source: HTMLCanvasElement, maxWidth: number): Uint8
   if (!ctx) throw new Error('Canvas printer tidak tersedia.');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, width, height);
-  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingEnabled = smooth;
   ctx.drawImage(source, 0, 0, width, height);
   const pixels = ctx.getImageData(0, 0, width, height).data;
   const bytesPerRow = width / 8;
@@ -168,26 +169,42 @@ function imageToEscPosRaster(source: HTMLCanvasElement, maxWidth: number): Uint8
   return command;
 }
 
-function makeQrRaster(value: string, maxWidth: number): Uint8Array {
-  const qr = QRCode.create(value, { errorCorrectionLevel: 'M' });
-  const modules = qr.modules.size;
-  const quiet = 4;
-  const modulePx = Math.max(3, Math.floor(maxWidth / (modules + quiet * 2)));
-  const size = (modules + quiet * 2) * modulePx;
+async function makeQrRaster(value: string, targetWidth: number): Promise<Uint8Array> {
+  const sourceSize = targetWidth * 3;
+  const dataUrl = await fetchExternalOrLocalQrDataUrl(value, sourceSize);
+  const image = await loadImage(dataUrl);
   const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = sourceSize;
+  canvas.height = sourceSize;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas QR printer tidak tersedia.');
   ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, size, size);
-  ctx.fillStyle = '#000';
-  for (let row = 0; row < modules; row++) {
-    for (let col = 0; col < modules; col++) {
-      if (qr.modules.data[row * modules + col]) ctx.fillRect((col + quiet) * modulePx, (row + quiet) * modulePx, modulePx, modulePx);
-    }
+  ctx.fillRect(0, 0, sourceSize, sourceSize);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, 0, 0, sourceSize, sourceSize);
+  return imageToEscPosRaster(canvas, targetWidth, false);
+}
+
+async function makeBarcodeRaster(value: string, targetWidth: number): Promise<Uint8Array> {
+  const targetHeight = 96;
+  const sourceWidth = targetWidth * 3;
+  const sourceHeight = targetHeight * 3;
+  const canvas = document.createElement('canvas');
+  canvas.width = sourceWidth;
+  canvas.height = sourceHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas barcode printer tidak tersedia.');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, sourceWidth, sourceHeight);
+  try {
+    const dataUrl = await fetchImageAsDataUrl(getExternalBarcodeUrl(value, 900, 240));
+    const image = await loadImage(dataUrl);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(image, 0, 0, sourceWidth, sourceHeight);
+  } catch {
+    drawCode128ToCanvas(ctx, value, 0, 0, sourceWidth, sourceHeight);
   }
-  return imageToEscPosRaster(canvas, maxWidth);
+  return imageToEscPosRaster(canvas, targetWidth, false);
 }
 
 function center(command: (...values: number[]) => void, text: (value: string) => void, value: string): void {
@@ -199,10 +216,12 @@ function center(command: (...values: number[]) => void, text: (value: string) =>
 export async function buildReceiptEscPos(order: Order, settings: StoreSettings): Promise<Uint8Array> {
   const paperChars = settings.printerPaperWidth === '80mm' ? 48 : 32;
   const pixelWidth = settings.printerPaperWidth === '80mm' ? 576 : 384;
+  const qrWidth = settings.printerPaperWidth === '80mm' ? 288 : 240;
+  const barcodeWidth = settings.printerPaperWidth === '80mm' ? 480 : 320;
   const encoder = new TextEncoder();
-  const safe = (value: unknown) => String(value ?? '').replace(/[\u0000-\u001F]/g, ' ').trim();
+  const safe = (value: unknown) => String(value ?? '').replace(/[\u0000-\u001F]/g, ' ').replace(/[^\x20-\x7E]/g, ' ').trim();
   const money = (value: number) => `Rp${new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(value || 0))}`;
-  const bytes: number[] = [0x1b, 0x40];
+  const bytes: number[] = [0x1b, 0x40, 0x1b, 0x33, 0x26];
   const text = (value: string) => bytes.push(...encoder.encode(value));
   const command = (...values: number[]) => bytes.push(...values);
   const append = (data: Uint8Array) => bytes.push(...data);
@@ -221,7 +240,7 @@ export async function buildReceiptEscPos(order: Order, settings: StoreSettings):
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(logo, 0, 0, canvas.width, canvas.height);
         command(0x1b, 0x61, 0x01);
-        append(imageToEscPosRaster(canvas, maxLogoWidth));
+        append(imageToEscPosRaster(canvas, maxLogoWidth, true));
         text('\n');
         command(0x1b, 0x61, 0x00);
       }
@@ -238,7 +257,7 @@ export async function buildReceiptEscPos(order: Order, settings: StoreSettings):
   command(0x1b, 0x61, 0x00);
   text(`No : ${safe(order.id)}\n`);
   text(`Tgl: ${safe(order.date)} ${safe(order.time)}\n`);
-  text(`Kasir: ${safe(order.cashierName)}\n`);
+  text(`Kasir: ${safe(order.cashierName || 'Kasir')}\n`);
   if (order.customer && order.customer !== 'Pelanggan') text(`Customer: ${safe(order.customer)}\n`);
   text(line(paperChars) + '\n');
 
@@ -246,6 +265,7 @@ export async function buildReceiptEscPos(order: Order, settings: StoreSettings):
     text(safe(item.name).slice(0, paperChars) + '\n');
     text(columns(`${item.qty} x ${money(item.price)}`, money(item.qty * item.price), paperChars) + '\n');
     if (item.note) text(`  Catatan: ${safe(item.note).slice(0, paperChars - 2)}\n`);
+    text('\n');
   }
 
   text(line(paperChars) + '\n');
@@ -265,19 +285,22 @@ export async function buildReceiptEscPos(order: Order, settings: StoreSettings):
       if (customer) {
         text(line(paperChars) + '\n');
         center(command, text, 'MEMBERSHIP CUSTOMER');
-        center(command, text, 'Scan QR untuk cek kunjungan & reward');
+        center(command, text, 'Scan QR untuk cek kunjungan');
         command(0x1b, 0x61, 0x01);
-        append(makeQrRaster(buildMembershipScanUrl(customer), Math.round(pixelWidth * 0.52)));
+        append(await makeQrRaster(buildMembershipScanUrl(customer), qrWidth));
+        text('\n');
+        append(await makeBarcodeRaster(customer.customerCode, barcodeWidth));
         text('\n');
         command(0x1b, 0x61, 0x00);
-        center(command, text, `${customer.customerCode} • ${customer.visitCount}/10 KUNJUNGAN`);
+        center(command, text, `${safe(customer.customerCode)} - ${customer.visitCount}/10 KUNJUNGAN`);
       }
-    } catch (error) { console.warn('YUPOS membership QR skipped:', error); }
+    } catch (error) { console.warn('YUPOS membership QR/barcode skipped:', error); }
   }
 
   text(line(paperChars) + '\n');
   center(command, text, safe(settings.footer || 'Terima kasih'));
   center(command, text, 'Powered by YUPOS');
+  command(0x1b, 0x32);
   text('\n\n');
   command(0x1d, 0x56, 0x00);
   return new Uint8Array(bytes);
