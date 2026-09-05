@@ -4,7 +4,9 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './',
+  // YUPOS is deployed as a GitHub Pages project site:
+  // https://yunarmedia.github.io/YUPOS/
+  base: '/YUPOS/',
 
   plugins: [
     react(),
