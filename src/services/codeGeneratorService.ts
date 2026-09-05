@@ -4,52 +4,22 @@ const QUICKCHART_QR_ENDPOINT = 'https://quickchart.io/qr';
 const QUICKCHART_BARCODE_ENDPOINT = 'https://quickchart.io/barcode';
 
 export function getExternalQrUrl(value: string, size = 600): string {
-  const params = new URLSearchParams({
-    text: value,
-    format: 'png',
-    size: String(size),
-    margin: '4',
-    ecLevel: 'H',
-    dark: '000000',
-    light: 'ffffff',
-  });
+  const params = new URLSearchParams({ text: value, format: 'png', size: String(size), margin: '4', ecLevel: 'H', dark: '000000', light: 'ffffff' });
   return `${QUICKCHART_QR_ENDPOINT}?${params.toString()}`;
 }
 
 export function getExternalQrSvgUrl(value: string, size = 600): string {
-  const params = new URLSearchParams({
-    text: value,
-    format: 'svg',
-    size: String(size),
-    margin: '4',
-    ecLevel: 'H',
-    dark: '000000',
-    light: 'ffffff',
-  });
+  const params = new URLSearchParams({ text: value, format: 'svg', size: String(size), margin: '4', ecLevel: 'H', dark: '000000', light: 'ffffff' });
   return `${QUICKCHART_QR_ENDPOINT}?${params.toString()}`;
 }
 
 export function getExternalBarcodeUrl(value: string, width = 900, height = 240): string {
-  const params = new URLSearchParams({
-    type: 'code128',
-    text: value,
-    format: 'png',
-    width: String(width),
-    height: String(height),
-    includeText: 'false',
-  });
+  const params = new URLSearchParams({ type: 'code128', text: value, format: 'png', width: String(width), height: String(height), includeText: 'false' });
   return `${QUICKCHART_BARCODE_ENDPOINT}?${params.toString()}`;
 }
 
 export function getExternalBarcodeSvgUrl(value: string, width = 900, height = 240): string {
-  const params = new URLSearchParams({
-    type: 'code128',
-    text: value,
-    format: 'svg',
-    width: String(width),
-    height: String(height),
-    includeText: 'false',
-  });
+  const params = new URLSearchParams({ type: 'code128', text: value, format: 'svg', width: String(width), height: String(height), includeText: 'false' });
   return `${QUICKCHART_BARCODE_ENDPOINT}?${params.toString()}`;
 }
 
@@ -66,18 +36,14 @@ export async function fetchImageAsDataUrl(url: string): Promise<string> {
 }
 
 export async function buildLocalQrDataUrl(value: string, size = 600): Promise<string> {
-  return QRCode.toDataURL(value, {
-    width: size,
-    margin: 4,
-    errorCorrectionLevel: 'H',
-    color: { dark: '#000000', light: '#ffffff' },
-  });
+  return QRCode.toDataURL(value, { width: size, margin: 4, errorCorrectionLevel: 'H', color: { dark: '#000000', light: '#ffffff' } });
 }
 
+// Local-first: Bluetooth receipt printing no longer depends on QuickChart, internet, CORS, or an API key.
 export async function fetchExternalOrLocalQrDataUrl(value: string, size = 600): Promise<string> {
   try {
-    return await fetchImageAsDataUrl(getExternalQrUrl(value, size));
+    return await buildLocalQrDataUrl(value, size);
   } catch {
-    return buildLocalQrDataUrl(value, size);
+    return fetchImageAsDataUrl(getExternalQrUrl(value, size));
   }
 }
