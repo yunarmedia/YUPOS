@@ -1,0 +1,51 @@
+import React, { useMemo } from 'react';
+import { Award, CheckCircle2, Crown, Gift, History, Phone, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Customer, MembershipRewardType } from '../types';
+import { Barcode128 } from './Barcode128';
+import { buildMembershipScanUrl } from '../services/membershipService';
+
+interface MembershipCardModalProps { customer: Customer; onClose: () => void; onClaimReward?: (reward: MembershipRewardType) => void; }
+
+export const MembershipCardModal: React.FC<MembershipCardModalProps> = ({ customer, onClose, onClaimReward }) => {
+  const scanUrl = useMemo(() => buildMembershipScanUrl(customer), [customer]);
+  const visits = customer.visitCount || 0;
+  const canDiscount = visits >= 5;
+  const canFreeHaircut = visits >= 10;
+  const progress = Math.min(100, (visits / 10) * 100);
+  const visitDetails = (customer.membershipVisits || []).slice(-10).reverse();
+
+  return <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+    <div className="w-full max-w-md max-h-[94dvh] overflow-y-auto rounded-[28px] bg-white shadow-2xl border border-slate-200">
+      <div className="relative overflow-hidden rounded-t-[28px] bg-gradient-to-br from-blue-950 via-blue-700 to-blue-500 p-5 text-white">
+        <button type="button" onClick={onClose} className="absolute right-4 top-4 p-2 rounded-xl bg-white/10 hover:bg-white/20" aria-label="Tutup member card"><X className="w-4 h-4" /></button>
+        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[.18em] text-blue-100"><Crown className="w-4 h-4 text-yellow-300 fill-yellow-300/20" /> YUPOS • Membership Card</div>
+        <h2 className="mt-3 text-2xl font-black tracking-tight">{customer.name}</h2>
+        <div className="mt-1 flex items-center gap-2 text-xs text-blue-100"><span className="font-mono font-black">{customer.customerCode}</span><span>•</span><span className="inline-flex items-center gap-1"><Phone className="w-3 h-3" />{customer.phone}</span></div>
+        <div className="mt-5 rounded-2xl bg-white/10 border border-white/15 p-3">
+          <div className="flex items-center justify-between text-[11px] font-bold"><span>Stempel Membership</span><span>{visits} / 10 Kunjungan</span></div>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/15"><div className="h-full rounded-full bg-yellow-300 transition-all" style={{ width: `${progress}%` }} /></div>
+          <div className="mt-2 flex justify-between text-[10px] text-blue-100"><span>5x = Diskon 50%</span><span>10x = Cukur Gratis</span></div>
+        </div>
+      </div>
+      <div className="p-5 space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center gap-2 text-xs font-black text-slate-800"><ShieldCheck className="w-4 h-4 text-blue-600" /> Barcode Verifikasi Membership</div>
+          <div className="mt-3 overflow-x-auto rounded-xl bg-white border border-slate-200 p-3"><Barcode128 value={scanUrl} height={58} moduleWidth={1.1} className="mx-auto" /></div>
+          <p className="mt-2 text-[10px] text-slate-500 text-center">Scan barcode untuk membuka rincian membership pada halaman verifikasi YUPOS.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-2xl border border-slate-200 p-3"><div className="text-[10px] font-bold text-slate-400">MEMBER SEJAK</div><div className="mt-1 text-sm font-black">{customer.memberSince || '-'}</div></div>
+          <div className="rounded-2xl border border-slate-200 p-3"><div className="text-[10px] font-bold text-slate-400">KUNJUNGAN TERAKHIR</div><div className="mt-1 text-sm font-black">{customer.lastVisit || '-'}</div></div>
+        </div>
+        {(canDiscount || canFreeHaircut) && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4"><div className="flex items-center gap-2 text-xs font-black text-amber-950"><Gift className="w-4 h-4 text-amber-600" /> Reward tersedia</div><div className="mt-3 grid grid-cols-1 gap-2">
+          {canDiscount && <button type="button" onClick={() => onClaimReward?.('discount50')} className="w-full rounded-xl bg-amber-500 px-3 py-2.5 text-xs font-black text-slate-950 hover:bg-amber-400 flex items-center justify-center gap-2"><Sparkles className="w-4 h-4" /> Claim Diskon 50%</button>}
+          {canFreeHaircut && <button type="button" onClick={() => onClaimReward?.('freeHaircut')} className="w-full rounded-xl bg-blue-600 px-3 py-2.5 text-xs font-black text-white hover:bg-blue-700 flex items-center justify-center gap-2"><Award className="w-4 h-4" /> Claim Cukur Gratis</button>}
+        </div></div>}
+        <div className="rounded-2xl border border-slate-200 p-4"><div className="flex items-center gap-2 text-xs font-black text-slate-800"><History className="w-4 h-4 text-blue-600" /> Rincian Kunjungan</div><div className="mt-3 space-y-2">
+          {visitDetails.length === 0 ? <p className="text-xs text-slate-400">Belum ada rincian kunjungan pada siklus ini.</p> : visitDetails.map((visit, index) => <div key={visit.id} className="flex items-start justify-between gap-3 rounded-xl bg-slate-50 p-2.5"><div><div className="text-[11px] font-black text-slate-800">#{visits - index} • {visit.date} {visit.time}</div><div className="text-[10px] text-slate-500 mt-0.5">{visit.services.length ? visit.services.join(', ') : 'Layanan barbershop'}</div></div><div className="text-right"><div className="text-[11px] font-black text-slate-900">Rp {visit.amount.toLocaleString('id-ID')}</div><div className="text-[10px] text-slate-400">{visit.staff.join(', ') || '-'}</div></div></div>)}
+        </div></div>
+        <div className="rounded-2xl bg-slate-900 p-3 text-[10px] leading-relaxed text-slate-300"><CheckCircle2 className="inline w-3.5 h-3.5 mr-1 text-emerald-400" /> Setelah reward diklaim, stempel kunjungan di-reset ke <strong className="text-white">0</strong> dan siklus membership dimulai kembali seperti member card baru.</div>
+      </div>
+    </div>
+  </div>;
+};
