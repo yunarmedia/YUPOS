@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>YUPOS Membership</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f1f5f9;color:#0f172a}.wrap{min-height:100vh;padding:24px 16px;display:flex;align-items:center;justify-content:center}.card{width:min(100%,520px);background:#fff;border:1px solid #dbe4f0;border-radius:28px;box-shadow:0 20px 60px rgba(15,23,42,.14);overflow:hidden}.hero{padding:26px;background:linear-gradient(135deg,#172554,#2563eb);color:#fff}.eyebrow{font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;opacity:.8}.hero h1{margin:6px 0 0;font-size:28px}.body{padding:20px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.stat{padding:13px;border:1px solid #e2e8f0;border-radius:16px;background:#f8fafc}.label{font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase}.value{margin-top:4px;font-weight:900;font-size:16px}.reward{margin:16px 0;padding:15px;border-radius:18px;background:#fffbeb;border:1px solid #fcd34d}.reward strong{display:block;color:#92400e}.reward span{font-size:12px;color:#78350f}.visits{margin-top:18px}.visits h2{font-size:14px;margin:0 0 10px}.visit{padding:12px 0;border-bottom:1px dashed #cbd5e1;font-size:12px;display:flex;justify-content:space-between;gap:10px}.visit:last-child{border-bottom:0}.muted{color:#64748b}.error{text-align:center;padding:40px 20px;color:#475569}.footer{text-align:center;font-size:10px;color:#94a3b8;padding:0 20px 22px}
+  </style>
+</head>
+<body>
+<div class="wrap"><main class="card" id="app"></main></div>
+<script>
+(function(){
+  const root=document.getElementById('app');
+  try{
+    const encoded=new URLSearchParams(location.search).get('d');
+    if(!encoded) throw new Error('Data membership tidak ditemukan.');
+    const binary=atob(encoded.replace(/-/g,'+').replace(/_/g,'/')+'==='.slice((encoded.length+3)%4));
+    const bytes=Uint8Array.from(binary,c=>c.charCodeAt(0));
+    const data=JSON.parse(new TextDecoder().decode(bytes));
+    const visits=Array.isArray(data.visitDetails)?data.visitDetails:[];
+    const reward=data.reward==='freeHaircut'?'Cukur GRATIS':data.reward==='discount50'?'Diskon 50%':'Belum ada reward';
+    const rewardText=data.reward==='freeHaircut'?'10 kunjungan tercapai — pelanggan berhak claim cukur gratis.':data.reward==='discount50'?'5 kunjungan tercapai — pelanggan berhak claim diskon 50%.':'Kumpulkan 5 kunjungan untuk diskon 50% atau 10 kunjungan untuk cukur gratis.';
+    const fmt=n=>new Intl.NumberFormat('id-ID',{style:'currency',currency:'IDR',minimumFractionDigits:0}).format(n||0);
+    root.innerHTML=`<section class="hero"><div class="eyebrow">YUPOS • MEMBERSHIP VERIFICATION</div><h1>${escapeHtml(data.name||'Customer')}</h1><div style="margin-top:8px;font-size:12px;opacity:.85">Kode Member: <b>${escapeHtml(data.code||'-')}</b></div></section><section class="body"><div class="grid"><div class="stat"><div class="label">Kunjungan</div><div class="value">${data.visits||0} / 10</div></div><div class="stat"><div class="label">Reward</div><div class="value">${reward}</div></div><div class="stat"><div class="label">Member sejak</div><div class="value">${escapeHtml(data.memberSince||'-')}</div></div><div class="stat"><div class="label">Kunjungan terakhir</div><div class="value">${escapeHtml(data.lastVisit||'-')}</div></div></div><div class="reward"><strong>${reward}</strong><span>${rewardText}</span></div><div class="visits"><h2>Rincian Kunjungan Membership</h2>${visits.length?visits.map((v,i)=>`<div class="visit"><div><b>${i+1}. ${escapeHtml(v.date||'-')} ${escapeHtml(v.time||'')}</b><div class="muted">${escapeHtml((v.services||[]).join(', ')||'Layanan barbershop')}</div></div><div><b>${fmt(v.amount)}</b><div class="muted">${escapeHtml((v.staff||[]).join(', ')||'-')}</div></div></div>`).join(''):'<div class="muted">Belum ada rincian kunjungan tersimpan pada barcode ini.</div>'}</div></section><div class="footer">Data pada halaman ini berasal dari snapshot membership yang tertanam di barcode struk.</div>`;
+  }catch(e){root.innerHTML='<div class="error"><b>Barcode Membership tidak valid</b><p>'+escapeHtml(e.message||'Gagal membaca data membership.')+'</p></div>'}
+  function escapeHtml(v){return String(v??'').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]))}
+})();
+</script>
+</body></html>
