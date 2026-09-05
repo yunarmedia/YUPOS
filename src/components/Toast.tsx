@@ -14,37 +14,43 @@ interface ToastProps {
 
 export const Toast: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none">
+    <div className="fixed top-3 right-3 sm:top-4 sm:right-4 z-[100] flex flex-col gap-2.5 w-[calc(100%-1.5rem)] sm:w-full sm:max-w-sm pointer-events-none">
       {toasts.map((t) => {
-        let borderClass = 'border-l-4 border-l-red-600';
-        let bgClass = 'bg-white';
-        let icon = <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />;
+        let accent = 'bg-blue-600';
+        let icon = <CheckCircle2 className="w-5 h-5 text-blue-600 shrink-0" />;
+        let label = 'Berhasil';
 
         if (t.type === 'error') {
-          borderClass = 'border-l-4 border-l-red-600';
+          accent = 'bg-red-500';
           icon = <AlertCircle className="w-5 h-5 text-red-500 shrink-0" />;
+          label = 'Terjadi Kesalahan';
         } else if (t.type === 'warning') {
-          borderClass = 'border-l-4 border-l-amber-500';
+          accent = 'bg-amber-400';
           icon = <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />;
+          label = 'Perhatian';
         } else if (t.type === 'info') {
-          borderClass = 'border-l-4 border-l-blue-600';
-          icon = <Info className="w-5 h-5 text-blue-500 shrink-0" />;
+          accent = 'bg-blue-600';
+          icon = <Info className="w-5 h-5 text-blue-600 shrink-0" />;
+          label = 'Informasi';
         }
 
         return (
           <div
             key={t.id}
-            className={`pointer-events-auto p-4 rounded-xl shadow-xl border border-slate-200 ${borderClass} ${bgClass} flex items-start gap-3 transition-all animate-in slide-in-from-top-2 duration-200`}
+            className="pointer-events-auto relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 p-3.5 sm:p-4 shadow-[0_16px_40px_rgba(15,23,42,.16)] backdrop-blur-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-200"
           >
-            {icon}
-            <div className="flex-1 text-xs font-bold text-slate-800 leading-snug">
-              {t.message}
+            <div className={`absolute left-0 top-0 bottom-0 w-1 ${accent}`} />
+            <div className="mt-0.5 rounded-xl bg-slate-50 p-2">{icon}</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-black uppercase tracking-[.12em] text-slate-400 mb-0.5">{label}</div>
+              <div className="text-xs sm:text-[13px] font-bold text-slate-800 leading-relaxed break-words">{t.message}</div>
             </div>
             <button
+              aria-label="Tutup pemberitahuan"
               onClick={() => onDismiss(t.id)}
-              className="text-slate-400 hover:text-slate-600 p-0.5 -mr-1"
+              className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         );
