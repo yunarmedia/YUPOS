@@ -1,7 +1,7 @@
+import QRCode from 'qrcode';
 import { Order, StoreSettings, Customer } from '../types';
 import { loadCustomers } from './customerService';
 import { buildMembershipScanUrl } from './membershipService';
-import { getCode128Bars } from '../components/Barcode128';
 
 function formatRp(num: number): string {
   return 'Rp ' + (num || 0).toLocaleString('id-ID');
@@ -25,17 +25,21 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines.length ? lines : [''];
 }
 
-function drawBarcode(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, maxWidth: number, height: number): number {
-  const bars = getCode128Bars(value);
-  const totalModules = bars.length ? bars[bars.length - 1].x + bars[bars.length - 1].width : 1;
-  const moduleWidth = Math.min(2.2, maxWidth / totalModules);
-  const width = totalModules * moduleWidth;
-  const startX = x + (maxWidth - width) / 2;
+async function drawMembershipQr(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, maxWidth: number, size = 240): Promise<number> {
+  const qrDataUrl = await QRCode.toDataURL(value, {
+    width: size,
+    margin: 2,
+    errorCorrectionLevel: 'M',
+    color: { dark: '#000000', light: '#ffffff' },
+  });
+  const image = await loadImage(qrDataUrl);
+  const qrSize = Math.min(size, maxWidth);
+  const startX = x + (maxWidth - qrSize) / 2;
   ctx.fillStyle = '#fff';
-  ctx.fillRect(startX, y, width, height);
-  ctx.fillStyle = '#000';
-  for (const bar of bars) if (bar.black) ctx.fillRect(startX + bar.x * moduleWidth, y, bar.width * moduleWidth, height);
-  return y + height;
+  ctx.fillRect(startX, y, qrSize, qrSize);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(image, startX, y, qrSize, qrSize);
+  return y + qrSize;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -59,8 +63,8 @@ export async function buildReceiptImage(order: Order, settings: StoreSettings): 
     } catch { memberCustomer = null; }
   }
 
-  const lineCount = order.items.reduce((sum, item) => sum + Math.max(1, Math.ceil(ctxMeasure(item.name, 24, contentWidth * 0.62).length / 2)), 0);
-  const estimatedHeight = 560 + order.items.length * 86 + lineCount * 24 + (memberCustomer ? 190 : 0) + Math.ceil((settings.footer || '').length / 60) * 24;
+  const lineCount = order.items.reduce((sum, item) => sum + Math.max(1, Math.ceil(String(item.name || '').length / 24)), 0);
+  const estimatedHeight = 560 + order.items.length * 86 + lineCount * 24 + (memberCustomer ? 360 : 0) + Math.ceil((settings.footer || '').length / 60) * 24;
   const canvas = document.createElement('canvas');
   canvas.width = width;
   canvas.height = Math.max(900, estimatedHeight);
@@ -119,9 +123,9 @@ export async function buildReceiptImage(order: Order, settings: StoreSettings): 
   if (memberCustomer) {
     drawDashedLine(ctx, padding, y, contentWidth); y += 25;
     center('MEMBERSHIP CUSTOMER', '900 20px system-ui', 26);
-    center('Scan barcode untuk cek kunjungan & reward membership', '500 15px system-ui', 24);
+    center('Scan QR untuk cek kunjungan & reward membership', '500 15px system-ui', 24);
     const scanUrl = buildMembershipScanUrl(memberCustomer);
-    y = drawBarcode(ctx, scanUrl, padding, y, contentWidth, 82) + 8;
+    y = await drawMembershipQr(ctx, scanUrl, padding, y, contentWidth, 240) + 10;
     center(`${memberCustomer.customerCode} • ${memberCustomer.visitCount}/10 KUNJUNGAN`, '800 16px monospace', 24);
   }
 
@@ -147,11 +151,6 @@ function drawDashedLine(ctx: CanvasRenderingContext2D, x: number, y: number, wid
 
 function drawRow(ctx: CanvasRenderingContext2D, left: string, right: string, x: number, rightX: number, y: number): void {
   ctx.textAlign = 'left'; ctx.fillText(left, x, y); ctx.textAlign = 'right'; ctx.fillText(right, rightX, y); ctx.textAlign = 'left';
-}
-
-function ctxMeasure(text: string, fontSize: number, maxWidth: number): string[] {
-  const rough = Math.max(1, Math.ceil(String(text || '').length / Math.max(8, Math.floor(maxWidth / fontSize))));
-  return Array.from({ length: rough }, (_, i) => String(text || '').slice(i * 24, (i + 1) * 24));
 }
 
 export async function shareReceiptImage(order: Order, settings: StoreSettings): Promise<'shared' | 'fallback' | 'cancelled'> {
