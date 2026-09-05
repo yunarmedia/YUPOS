@@ -56,7 +56,61 @@ async function connectDevice(device: BluetoothDevice): Promise<{ device: Bluetoo
   return { device, characteristic };
 }
 
-/** Open Chrome's native Web Bluetooth device chooser from the user's button click. */
+function showYuposBluetoothDialog(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const existing = document.getElementById('yupos-bluetooth-dialog');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'yupos-bluetooth-dialog';
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:2147483647', 'display:flex', 'align-items:center', 'justify-content:center',
+      'padding:20px', 'background:rgba(15,23,42,.58)', 'backdrop-filter:blur(8px)', '-webkit-backdrop-filter:blur(8px)',
+      'font-family:Plus Jakarta Sans,Inter,system-ui,-apple-system,sans-serif'
+    ].join(';');
+
+    overlay.innerHTML = `
+      <div role="dialog" aria-modal="true" style="width:min(420px,100%);background:#fff;border:1px solid #dbe4f0;border-radius:24px;box-shadow:0 24px 70px rgba(15,23,42,.28);overflow:hidden">
+        <div style="padding:22px 22px 18px;background:linear-gradient(135deg,#eff6ff,#ffffff 60%);border-bottom:1px solid #e5e7eb">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:48px;height:48px;border-radius:15px;background:#2563eb;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(37,99,235,.25)">
+              <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10-5 5V2l5 5L7 17"/><path d="M4 9l8 8"/><path d="M4 15l8-8"/></svg>
+            </div>
+            <div>
+              <div style="font-size:17px;font-weight:900;color:#0f172a;letter-spacing:-.02em">Hubungkan Printer Bluetooth</div>
+              <div style="font-size:11px;font-weight:700;color:#64748b;margin-top:3px">YUPOS • Printer Kasir / Dapur</div>
+            </div>
+          </div>
+        </div>
+        <div style="padding:20px 22px 22px">
+          <div style="display:flex;gap:12px;padding:13px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:15px">
+            <div style="font-size:18px">📡</div>
+            <div style="font-size:12px;line-height:1.55;color:#475569;font-weight:600">YUPOS akan membuka pemilih perangkat Bluetooth untuk menemukan printer yang tersedia di sekitar perangkat Anda.</div>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:#94a3b8;font-weight:600">Gunakan printer Bluetooth <b style="color:#64748b">BLE / ESC-POS</b> dan pastikan printer menyala.</div>
+          <div style="display:flex;gap:10px;margin-top:20px">
+            <button id="yupos-bt-cancel" type="button" style="flex:1;padding:12px;border-radius:13px;border:1px solid #e2e8f0;background:#f8fafc;color:#475569;font-size:12px;font-weight:800">Batal</button>
+            <button id="yupos-bt-continue" type="button" style="flex:1.35;padding:12px;border-radius:13px;border:0;background:#2563eb;color:white;font-size:12px;font-weight:900;box-shadow:0 8px 18px rgba(37,99,235,.22)">Pilih Printer Bluetooth</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const cleanup = (value: boolean) => {
+      overlay.remove();
+      resolve(value);
+    };
+
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) cleanup(false);
+    });
+    overlay.querySelector('#yupos-bt-cancel')?.addEventListener('click', () => cleanup(false));
+    overlay.querySelector('#yupos-bt-continue')?.addEventListener('click', () => cleanup(true));
+    document.body.appendChild(overlay);
+  });
+}
+
+/** Open a YUPOS-styled confirmation first, then Chrome's required native Web Bluetooth chooser. */
 export async function requestBluetoothPrinter(): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
   if (!('bluetooth' in navigator)) {
     throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge pada perangkat yang mendukung Bluetooth BLE.');
@@ -65,7 +119,10 @@ export async function requestBluetoothPrinter(): Promise<{ device: BluetoothDevi
   const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined;
   if (!bluetooth) throw new Error('Bluetooth API tidak tersedia.');
 
-  // Always open the chooser. Do not silently auto-connect to a previously authorized device.
+  const shouldContinue = await showYuposBluetoothDialog();
+  if (!shouldContinue) throw new Error('User cancelled');
+
+  // Must be called from the user's button flow; Chrome owns the actual device chooser UI.
   const device = await bluetooth.requestDevice({
     acceptAllDevices: true,
     optionalServices: OPTIONAL_SERVICES,
