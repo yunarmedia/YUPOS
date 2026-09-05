@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yupos-shell-v2';
+const CACHE_NAME = 'yupos-shell-v3';
 
 function appUrl(path) {
   return new URL(path, self.registration.scope).toString();
@@ -36,6 +36,29 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  // Always prefer the network for the document and service-worker script.
+  // This prevents an installed PWA from serving an old JavaScript bundle
+  // after a new GitHub Pages deployment.
+  const isNavigation = event.request.mode === 'navigate';
+  const isAppDocument = url.pathname.endsWith('/index.html');
+  const isServiceWorker = url.pathname.endsWith('/sw.js');
+
+  if (isNavigation || isAppDocument || isServiceWorker) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' })
+        .then((response) => {
+          if (response.ok && !isServiceWorker) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match(appUrl('./index.html'))))
+    );
+    return;
+  }
+
+  // Static hashed Vite assets can remain cache-first; new builds receive new URLs.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
