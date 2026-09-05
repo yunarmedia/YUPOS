@@ -1,10 +1,10 @@
-export type BusinessType = 
-  | 'barbershop' 
-  | 'salon' 
-  | 'fnb' 
-  | 'retail' 
-  | 'laundry' 
-  | 'workshop' 
+export type BusinessType =
+  | 'barbershop'
+  | 'salon'
+  | 'fnb'
+  | 'retail'
+  | 'laundry'
+  | 'workshop'
   | 'custom';
 
 export type ItemType = 'service' | 'product';
@@ -14,7 +14,7 @@ export interface BusinessCategoryPreset {
   name: string;
   tagline: string;
   icon: string;
-  identifierLabel: string; // e.g. "No. Meja / Pemesan" or "Kursi / Nama Pelanggan"
+  identifierLabel: string;
   defaultStaffRoles: string[];
   defaultCategories: string[];
   defaultItems: ProductItem[];
@@ -26,7 +26,7 @@ export interface ProductItem {
   name: string;
   category: string;
   price: number;
-  type: ItemType; // 'service' (Jasa) or 'product' (Barang)
+  type: ItemType;
   reqStaffRole: string;
   available: boolean;
   stock?: number;
@@ -39,17 +39,17 @@ export interface ProductItem {
 export interface CartItem extends ProductItem {
   qty: number;
   note?: string;
-  assignedTo?: string; // name of staff who performed the service
+  assignedTo?: string;
 }
 
 export type OrderStatus = 'selesai' | 'pending' | 'batal';
 
 export interface Order {
   id: string;
-  date: string; // YYYY-MM-DD or DD/MM/YYYY
+  date: string;
   time: string;
   timestamp: number;
-  customer: string; // Customer name / Table / Seat / Plate / Note
+  customer: string;
   customerPhone?: string;
   customerCode?: string;
   customerIsMember?: boolean;
@@ -62,11 +62,30 @@ export interface Order {
   ppnRate?: number;
   total: number;
   status: OrderStatus;
-  payment: string; // 'Cash' | 'QRIS' | 'Bank Transfer' | 'Shopeefood' | 'Gofood' | 'Grabfood' | etc.
-  shift: string; // '1' | '2' | 'Online Web'
+  payment: string;
+  shift: string;
   cashierName: string;
   businessType?: BusinessType;
   merchantId?: string;
+}
+
+export interface MembershipVisit {
+  id: string;
+  date: string;
+  time: string;
+  amount: number;
+  orderId?: string;
+  services: string[];
+  staff: string[];
+}
+
+export type MembershipRewardType = 'discount50' | 'freeHaircut';
+
+export interface MembershipRedemption {
+  id: string;
+  type: MembershipRewardType;
+  date: string;
+  visitCount: number;
 }
 
 export interface Customer {
@@ -74,7 +93,7 @@ export interface Customer {
   merchantId?: string;
   name: string;
   phone: string;
-  customerCode: string; // 2 first letters (capital) + 4 last digits of phone
+  customerCode: string;
   visitCount: number;
   isMember: boolean;
   memberSince?: string;
@@ -82,6 +101,8 @@ export interface Customer {
   lastVisit: string;
   notes?: string;
   createdAt?: number;
+  membershipVisits?: MembershipVisit[];
+  membershipRedemptions?: MembershipRedemption[];
 }
 
 export interface Expense {
@@ -105,6 +126,7 @@ export interface PortalPins {
   settings: string;
   historyDeletePin?: string;
   historyEditPin?: string;
+  historyCancelPin?: string;
 }
 
 export interface StoreSettings {
@@ -116,10 +138,10 @@ export interface StoreSettings {
   logoBase64: string;
   shift1Name: string;
   shift2Name: string;
-  shift1Start?: string; // e.g. "10:00"
-  shift1End?: string;   // e.g. "13:00"
-  shift2Start?: string; // e.g. "13:00"
-  shift2End?: string;   // e.g. "22:00"
+  shift1Start?: string;
+  shift1End?: string;
+  shift2Start?: string;
+  shift2End?: string;
   activeShift: '1' | '2';
   manualOverride: boolean;
   portalPins: PortalPins;
@@ -129,7 +151,7 @@ export interface StoreSettings {
   ppnRate?: number;
   categories: string[];
   staffRoles: string[];
-  staffList: Record<string, string[]>; // role -> list of names
+  staffList: Record<string, string[]>;
 }
 
 export interface MerchantUser {
