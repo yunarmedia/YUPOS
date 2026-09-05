@@ -1031,10 +1031,8 @@ export default function App() {
             }
             btStatusKasir={btStatusKasir}
             btStatusDapur={btStatusDapur}
-            onConnectPrinterKasir={() => connectBluetoothPrinter('kasir')}
-            onDisconnectPrinterKasir={() => disconnectBluetoothPrinter('kasir')}
-            onConnectPrinterDapur={() => connectBluetoothPrinter('dapur')}
-            onDisconnectPrinterDapur={() => disconnectBluetoothPrinter('dapur')}
+            onConnectPrinter={(type) => connectBluetoothPrinter(type)}
+            onDisconnectPrinter={(type) => disconnectBluetoothPrinter(type)}
           />
         )}
       </main>
