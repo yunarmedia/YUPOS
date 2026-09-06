@@ -58,12 +58,20 @@ export function buildMembershipSnapshot(customer: Customer): MembershipSnapshot 
   };
 }
 
-export function buildMembershipQrSnapshot(customer: Customer): Omit<MembershipSnapshot, 'visitDetails'> {
+/**
+ * Compact payload used inside the printed QR. Keeping only the fields needed
+ * to identify the member and show reward status makes the QR less dense and
+ * dramatically improves scan reliability on small thermal printers.
+ */
+export function buildMembershipQrSnapshot(customer: Customer) {
   return {
-    app: 'YUPOS', version: 1, code: normalizeText(customer.customerCode), name: normalizeText(customer.name),
-    phone: normalizeText(customer.phone || ''), visits: customer.visitCount || 0, memberSince: customer.memberSince,
-    totalSpent: customer.totalSpent || 0, lastVisit: normalizeText(customer.lastVisit || '-'), reward: getMembershipReward(customer),
-  };
+    a: 'Y',
+    v: 2,
+    c: normalizeText(customer.customerCode),
+    n: normalizeText(customer.name),
+    i: customer.visitCount || 0,
+    r: getMembershipReward(customer),
+  } as const;
 }
 
 export function buildMembershipScanUrl(customer: Customer): string {
