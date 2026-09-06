@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yupos-shell-v5';
+const CACHE_NAME = 'yupos-shell-v6';
 
 function appUrl(path) {
   return new URL(path, self.registration.scope).toString();
