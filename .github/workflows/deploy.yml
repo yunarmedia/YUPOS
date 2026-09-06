@@ -36,6 +36,7 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+          VITE_BUILD_ID: ${{ github.sha }}
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v5
