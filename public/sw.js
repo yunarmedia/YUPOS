@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yupos-shell-v7';
+const CACHE_NAME = 'yupos-shell-v8';
 
 function appUrl(path) { return new URL(path, self.registration.scope).toString(); }
 const APP_SHELL = [appUrl('./'),appUrl('./index.html'),appUrl('./manifest.webmanifest'),appUrl('./assets/icon-192.png'),appUrl('./assets/icon-512.png'),appUrl('./assets/yupos-app-icon.png'),appUrl('./assets/yupos-loading-logo.png')];
