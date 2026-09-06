@@ -40,6 +40,6 @@ createRoot(rootElement).render(<StrictMode><AuthBootstrap><UpdateNotice /><App /
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js?v=7', { updateViaCache: 'none' }).then((registration) => registration.update()).catch((error) => console.warn('YUPOS service worker registration failed:', error));
+    navigator.serviceWorker.register('./sw.js?v=8', { updateViaCache: 'none' }).then((registration) => registration.update()).catch((error) => console.warn('YUPOS service worker registration failed:', error));
   });
 }
