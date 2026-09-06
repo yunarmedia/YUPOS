@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { AuthBootstrap } from './components/AuthBootstrap';
+import { UpdateNotice } from './components/UpdateNotice';
 import './index.css';
 
 function installYuposConfirmBridge() {
@@ -87,6 +88,7 @@ if (!rootElement) throw new Error('YUPOS root element (#root) was not found.');
 createRoot(rootElement).render(
   <StrictMode>
     <AuthBootstrap>
+      <UpdateNotice />
       <App />
     </AuthBootstrap>
   </StrictMode>,
