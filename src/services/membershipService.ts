@@ -13,6 +13,15 @@ function normalizeText(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '?');
 }
 
+function formatCreatedAt(createdAt?: number): string | undefined {
+  if (!createdAt) return undefined;
+  try {
+    return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(createdAt));
+  } catch {
+    return undefined;
+  }
+}
+
 export interface MembershipSnapshot {
   app: 'YUPOS';
   version: 1;
@@ -50,27 +59,49 @@ function deriveVisitDetails(customer: Customer): MembershipVisit[] {
 }
 
 export function buildMembershipSnapshot(customer: Customer): MembershipSnapshot {
+  const visits = deriveVisitDetails(customer);
+  const latest = visits[visits.length - 1];
   return {
     app: 'YUPOS', version: 1, code: normalizeText(customer.customerCode), name: normalizeText(customer.name),
-    phone: normalizeText(customer.phone || ''), visits: customer.visitCount || 0, memberSince: customer.memberSince,
-    totalSpent: customer.totalSpent || 0, lastVisit: normalizeText(customer.lastVisit || '-'), reward: getMembershipReward(customer),
-    visitDetails: deriveVisitDetails(customer),
+    phone: normalizeText(customer.phone || ''), visits: customer.visitCount || 0,
+    memberSince: normalizeText(customer.memberSince || formatCreatedAt(customer.createdAt) || '-'),
+    totalSpent: customer.totalSpent || 0,
+    lastVisit: normalizeText(customer.lastVisit || (latest ? `${latest.date} ${latest.time}`.trim() : '-')),
+    reward: getMembershipReward(customer), visitDetails: visits,
   };
 }
 
 /**
- * Compact payload used inside the printed QR. Keeping only the fields needed
- * to identify the member and show reward status makes the QR less dense and
- * dramatically improves scan reliability on small thermal printers.
+ * Compact payload used inside the printed QR. It includes the member identity,
+ * current reward state, creation date, latest visit and latest purchased/
+ * booked items while remaining small enough for reliable thermal QR printing.
  */
 export function buildMembershipQrSnapshot(customer: Customer) {
+  const visits = deriveVisitDetails(customer);
+  const latest = visits[visits.length - 1];
+  const latestOrderItems = latest
+    ? (() => {
+        try {
+          const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || 'default_merchant';
+          const settingsRaw = localStorage.getItem(`yupos_${merchantId}_settings`);
+          const businessType = settingsRaw ? JSON.parse(settingsRaw)?.businessType || 'barbershop' : 'barbershop';
+          const orders = loadMerchantOrders(merchantId, businessType);
+          const order = orders.find((candidate) => candidate.id === latest.orderId);
+          return order?.items.map((item) => `${item.name}${item.qty > 1 ? ` x${item.qty}` : ''}`).slice(0, 4) || latest.services.slice(0, 4);
+        } catch { return latest.services.slice(0, 4); }
+      })()
+    : [];
+
   return {
     a: 'Y',
-    v: 2,
+    v: 3,
     c: normalizeText(customer.customerCode),
     n: normalizeText(customer.name),
     i: customer.visitCount || 0,
     r: getMembershipReward(customer),
+    ms: normalizeText(customer.memberSince || formatCreatedAt(customer.createdAt) || '-'),
+    lv: normalizeText(customer.lastVisit || (latest ? `${latest.date} ${latest.time}`.trim() : '-')),
+    li: latestOrderItems.map(normalizeText).join(' | ').slice(0, 180),
   } as const;
 }
 
