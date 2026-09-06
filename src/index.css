@@ -261,10 +261,258 @@ textarea {
   box-shadow: 0 10px 24px rgba(37,99,235,.32);
 }
 
+/* YUPOS update notice — blue/yellow refresh dialog inspired by the supplied reference. */
+.yupos-update-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: radial-gradient(circle at 50% 20%, rgba(147,197,253,.22), transparent 35%), rgba(15,23,42,.62);
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  animation: yupos-confirm-fade 180ms ease-out;
+}
+
+.yupos-update-card {
+  position: relative;
+  width: min(100%, 520px);
+  max-height: min(92vh, 760px);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.85);
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 35px 100px rgba(15,23,42,.34), 0 12px 35px rgba(37,99,235,.18);
+  animation: yupos-update-pop 240ms cubic-bezier(.2,.8,.2,1);
+}
+
+.yupos-update-hero {
+  position: relative;
+  height: 145px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 45%, #fef9c3 100%);
+}
+
+.yupos-update-hero::after {
+  content: '';
+  position: absolute;
+  left: -5%;
+  right: -5%;
+  bottom: -52px;
+  height: 100px;
+  border-radius: 50% 50% 0 0;
+  background: #fff;
+  transform: rotate(-2deg);
+}
+
+.yupos-update-rocket {
+  position: absolute;
+  left: 50%;
+  top: 23px;
+  z-index: 2;
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  transform: translateX(-50%);
+  border-radius: 22px;
+  color: #fff;
+  background: linear-gradient(145deg, #2563eb, #1d4ed8);
+  box-shadow: 0 13px 30px rgba(37,99,235,.28), 0 0 0 8px rgba(255,255,255,.45);
+  animation: yupos-update-float 2.6s ease-in-out infinite;
+}
+
+.yupos-update-rocket::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  width: 18px;
+  height: 20px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(#facc15, #fb923c);
+  filter: blur(.2px);
+}
+
+.yupos-update-spark,
+.yupos-update-orbit {
+  position: absolute;
+  color: #2563eb;
+}
+
+.yupos-update-spark { z-index: 3; }
+.spark-one { left: 19%; top: 38px; color: #facc15; }
+.spark-two { right: 19%; top: 57px; color: #2563eb; }
+
+.yupos-update-orbit {
+  width: 13px;
+  height: 13px;
+  border: 4px solid currentColor;
+  border-radius: 50%;
+  opacity: .85;
+}
+
+.orbit-one { left: 12%; bottom: 25px; color: #2563eb; }
+.orbit-two { right: 10%; bottom: 18px; color: #facc15; }
+
+.yupos-update-wave {
+  position: absolute;
+  z-index: 1;
+  width: 160px;
+  height: 55px;
+  border-radius: 50%;
+  border: 2px solid rgba(37,99,235,.12);
+}
+
+.wave-one { left: -45px; top: 20px; transform: rotate(-20deg); }
+.wave-two { right: -55px; top: 13px; transform: rotate(20deg); }
+
+.yupos-update-close {
+  position: absolute;
+  z-index: 5;
+  right: 14px;
+  top: 14px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255,255,255,.7);
+  border-radius: 12px;
+  background: rgba(255,255,255,.76);
+  color: #475569;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.yupos-update-close:hover { color: #2563eb; background: #fff; }
+
+.yupos-update-body {
+  padding: 24px 26px 25px;
+  overflow-y: auto;
+  max-height: calc(min(92vh, 760px) - 145px);
+}
+
+.yupos-update-heading-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.yupos-update-eyebrow {
+  margin-bottom: 7px;
+  color: #2563eb;
+  font-size: 10px;
+  letter-spacing: .15em;
+  font-weight: 950;
+}
+
+.yupos-update-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(20px, 4vw, 25px);
+  line-height: 1.15;
+  font-weight: 950;
+  letter-spacing: -.035em;
+}
+
+.yupos-update-version {
+  flex: none;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.yupos-update-description {
+  margin: 10px 0 17px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 650;
+}
+
+.yupos-update-list {
+  display: grid;
+  gap: 8px;
+}
+
+.yupos-update-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid #e5edf9;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f8fbff, #fff);
+  color: #334155;
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 700;
+}
+
+.yupos-update-number {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 950;
+  box-shadow: 0 5px 12px rgba(37,99,235,.18);
+}
+
+.yupos-update-refresh {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 12px 25px rgba(37,99,235,.25);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.yupos-update-refresh:hover { box-shadow: 0 15px 30px rgba(37,99,235,.32); }
+.yupos-update-refresh:active { transform: scale(.985); }
+.yupos-update-refresh:disabled { opacity: .82; cursor: wait; }
+
+.yupos-update-note {
+  margin-top: 11px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 9.5px;
+  line-height: 1.4;
+  font-weight: 700;
+  text-align: center;
+}
+
+.yupos-update-note svg { flex: none; color: #2563eb; margin-top: 1px; }
+
 @media (max-width: 480px) {
-  .yupos-confirm-overlay {
+  .yupos-confirm-overlay,
+  .yupos-update-overlay {
     align-items: flex-end;
-    padding: 12px;
+    padding: 10px;
   }
 
   .yupos-confirm-card {
@@ -272,6 +520,20 @@ textarea {
     border-radius: 26px;
     padding: 24px 20px calc(20px + env(safe-area-inset-bottom));
   }
+
+  .yupos-update-card {
+    width: 100%;
+    max-height: 94vh;
+    border-radius: 26px;
+  }
+
+  .yupos-update-hero { height: 125px; }
+  .yupos-update-body {
+    padding: 21px 17px calc(17px + env(safe-area-inset-bottom));
+    max-height: calc(94vh - 125px);
+  }
+
+  .yupos-update-item { font-size: 10.5px; }
 }
 
 @keyframes yupos-confirm-fade {
@@ -282,6 +544,16 @@ textarea {
 @keyframes yupos-confirm-pop {
   from { opacity: 0; transform: translateY(10px) scale(.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes yupos-update-pop {
+  from { opacity: 0; transform: translateY(18px) scale(.965); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes yupos-update-float {
+  0%, 100% { transform: translateX(-50%) translateY(0) rotate(-1deg); }
+  50% { transform: translateX(-50%) translateY(-5px) rotate(1deg); }
 }
 
 @keyframes yupos-logo-in {
