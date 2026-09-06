@@ -11,16 +11,15 @@ export const AppSplash: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[100] flex min-h-screen items-center justify-center overflow-hidden bg-black">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.28),transparent_58%)]" />
+    <div className="fixed inset-0 z-[100] flex min-h-screen items-center justify-center overflow-hidden bg-[#020617]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(37,99,235,0.34),transparent_58%)]" />
       <div className="relative flex w-full max-w-md flex-col items-center px-8 text-center">
-        <div className="relative w-[min(82vw,420px)] overflow-hidden rounded-[2rem] shadow-[0_0_80px_rgba(37,99,235,0.28)] animate-[yupos-logo-in_900ms_cubic-bezier(.22,1,.36,1)_both]">
+        <div className="relative flex w-[min(82vw,420px)] items-center justify-center animate-[yupos-logo-in_900ms_cubic-bezier(.22,1,.36,1)_both]">
           <img
             src="./assets/yupos-loading-logo.png"
             alt="YUPOS - One Pos For Everything"
-            className="block h-auto w-full object-contain"
+            className="block h-auto w-full object-contain mix-blend-screen drop-shadow-[0_0_55px_rgba(37,99,235,0.34)]"
           />
-          <div className="pointer-events-none absolute inset-0 rounded-[2rem] ring-1 ring-white/10" />
         </div>
         <div className="mt-7 flex items-center gap-2 text-white/70">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-300" />
