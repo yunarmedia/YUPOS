@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isMerchant(merchantId) {
+      return request.auth != null && request.auth.uid == merchantId;
+    }
+
+    match /yupos_config/{merchantId}/settings/{document} {
+      allow read, write: if isMerchant(merchantId);
+    }
+
+    match /yupos_catalog/{merchantId}/{businessType}/{document} {
+      allow read, write: if isMerchant(merchantId);
+    }
+
+    match /yupos_transactions/{merchantId}/{businessType}/{document} {
+      allow read, write: if isMerchant(merchantId);
+    }
+
+    match /yupos_finances/{merchantId}/{businessType}/{document} {
+      allow read, write: if isMerchant(merchantId);
+    }
+
+    match /yupos_crm/{merchantId}/customers/{document} {
+      allow read, write: if isMerchant(merchantId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
