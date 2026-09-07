@@ -1,4 +1,4 @@
-import { doc, getDoc, runTransaction, setDoc } from 'firebase/firestore';
+import { doc, runTransaction, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Order, Expense, ProductItem, StoreSettings, BusinessType } from '../types';
 import { BUSINESS_PRESETS } from '../config/businessCategories';
@@ -14,8 +14,16 @@ export const defaultSettings: StoreSettings = {
   staffList: { 'Capster / Barber': ['Rian', 'Budi', 'Roni'], 'Barber Utama': ['Master Danu'], 'Kasir': ['Siti', 'Dewi'] },
 };
 
+function requireMerchantId(merchantId: string): string {
+  const id = String(merchantId || '').trim();
+  if (!id || id === 'default' || id === 'default_merchant' || id === 'merchant_default') {
+    throw new Error('Merchant authentication is required before accessing merchant data.');
+  }
+  return id;
+}
+
 export function getMerchantStorageKey(merchantId: string, businessType: BusinessType | string, dataType: 'products' | 'orders' | 'expenses' | 'pettyCash' | 'settings'): string {
-  const mId = merchantId || 'merchant_default';
+  const mId = requireMerchantId(merchantId);
   if (dataType === 'settings') return `yupos_${mId}_settings`;
   return `yupos_${mId}_${businessType}_${dataType}`;
 }
@@ -30,28 +38,31 @@ export function saveLocalData<T>(key: string, value: T): void {
 }
 
 export function loadMerchantSettings(merchantId: string): StoreSettings {
+  if (!String(merchantId || '').trim()) return { ...defaultSettings };
   const key = getMerchantStorageKey(merchantId, 'default', 'settings');
-  let saved = loadLocalData<StoreSettings | null>(key, null);
-  if (!saved) saved = loadLocalData<StoreSettings | null>('yupos_settings', null);
+  const saved = loadLocalData<StoreSettings | null>(key, null);
   if (!saved) return { ...defaultSettings };
   return { ...defaultSettings, ...saved, shift1Start: saved.shift1Start || '10:00', shift1End: saved.shift1End || '13:00', shift2Start: saved.shift2Start || '13:00', shift2End: saved.shift2End || '22:00' };
 }
 export function saveMerchantSettings(merchantId: string, settings: StoreSettings): void {
-  saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), settings); saveLocalData('yupos_settings', settings);
+  const id = requireMerchantId(merchantId);
+  saveLocalData(getMerchantStorageKey(id, 'default', 'settings'), settings);
 }
 
 export function loadMerchantProducts(merchantId: string, businessType: BusinessType): ProductItem[] {
-  const key = getMerchantStorageKey(merchantId, businessType, 'products'); const raw = localStorage.getItem(key);
+  if (!String(merchantId || '').trim()) return [];
+  const key = getMerchantStorageKey(merchantId, businessType, 'products');
+  const raw = localStorage.getItem(key);
   if (raw) { try { return (JSON.parse(raw) as ProductItem[]).map((it) => ({ ...it, businessType, merchantId })); } catch {} }
-  if (businessType === 'barbershop') {
-    const legacyRaw = localStorage.getItem('yupos_products');
-    if (legacyRaw) { try { const tagged = (JSON.parse(legacyRaw) as ProductItem[]).map((it) => ({ ...it, businessType: 'barbershop' as BusinessType, merchantId })); saveMerchantProducts(merchantId, 'barbershop', tagged); return tagged; } catch {} }
-  }
   const preset = BUSINESS_PRESETS[businessType] || BUSINESS_PRESETS.barbershop;
-  const initialItems = (preset.defaultItems || []).map((it) => ({ ...it, businessType, merchantId })); saveMerchantProducts(merchantId, businessType, initialItems); return initialItems;
+  const initialItems = (preset.defaultItems || []).map((it) => ({ ...it, businessType, merchantId }));
+  saveMerchantProducts(merchantId, businessType, initialItems);
+  return initialItems;
 }
 export function saveMerchantProducts(merchantId: string, businessType: BusinessType, products: ProductItem[]): void {
-  saveLocalData(getMerchantStorageKey(merchantId, businessType, 'products'), products);
+  const id = requireMerchantId(merchantId);
+  const sanitized = products.map((product) => ({ ...product, merchantId: id, businessType }));
+  saveLocalData(getMerchantStorageKey(id, businessType, 'products'), sanitized);
 }
 
 function createCollisionSafeOrderId(): string {
@@ -74,95 +85,111 @@ function normalizeOrderIds(orders: Order[], existingIds: Set<string> = new Set()
     }
     used.add(id);
     if (id === order.id) return order;
-    order.id = id;
-    return order;
+    return { ...order, id };
   });
 }
 
 export function loadMerchantOrders(merchantId: string, businessType: BusinessType): Order[] {
-  const key = getMerchantStorageKey(merchantId, businessType, 'orders'); const raw = localStorage.getItem(key);
+  if (!String(merchantId || '').trim()) return [];
+  const key = getMerchantStorageKey(merchantId, businessType, 'orders');
+  const raw = localStorage.getItem(key);
   if (raw) { try { return normalizeOrderIds(JSON.parse(raw) as Order[]); } catch {} }
-  if (businessType === 'barbershop') {
-    const legacy = loadLocalData<Order[]>('yupos_orders', []); if (legacy.length > 0) { saveMerchantOrders(merchantId, 'barbershop', legacy); return legacy; }
-  }
   return [];
 }
 
 export function saveMerchantOrders(merchantId: string, businessType: BusinessType, orders: Order[]): void {
-  const key = getMerchantStorageKey(merchantId, businessType, 'orders');
+  const id = requireMerchantId(merchantId);
+  const key = getMerchantStorageKey(id, businessType, 'orders');
   const current = loadLocalData<Order[]>(key, []);
   const existingIds = new Set(current.map((order) => String(order.id || '')));
-  const normalized = normalizeOrderIds(orders, existingIds);
+  const normalized = normalizeOrderIds(orders.map((order) => ({ ...order, merchantId: id, businessType })), existingIds);
   saveLocalData(key, normalized);
 }
 
 export function loadMerchantExpenses(merchantId: string, businessType: BusinessType): Expense[] {
-  const key = getMerchantStorageKey(merchantId, businessType, 'expenses'); const raw = localStorage.getItem(key);
+  if (!String(merchantId || '').trim()) return [];
+  const key = getMerchantStorageKey(merchantId, businessType, 'expenses');
+  const raw = localStorage.getItem(key);
   if (raw) { try { return JSON.parse(raw); } catch {} }
-  if (businessType === 'barbershop') { const legacy = loadLocalData<Expense[]>('yupos_expenses', []); if (legacy.length > 0) { saveMerchantExpenses(merchantId, 'barbershop', legacy); return legacy; } }
   return [];
 }
 export function saveMerchantExpenses(merchantId: string, businessType: BusinessType, expenses: Expense[]): void {
-  saveLocalData(getMerchantStorageKey(merchantId, businessType, 'expenses'), expenses);
+  const id = requireMerchantId(merchantId);
+  saveLocalData(getMerchantStorageKey(id, businessType, 'expenses'), expenses);
 }
 export function loadMerchantPettyCash(merchantId: string, businessType: BusinessType): number {
+  if (!String(merchantId || '').trim()) return 0;
   return loadLocalData<number>(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), 0);
 }
 export function saveMerchantPettyCash(merchantId: string, businessType: BusinessType, amount: number): void {
-  saveLocalData(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), amount);
+  const id = requireMerchantId(merchantId);
+  saveLocalData(getMerchantStorageKey(id, businessType, 'pettyCash'), amount);
 }
 
-export async function syncConfigToFirebase(settings: StoreSettings, merchantId: string = 'default'): Promise<boolean> {
-  saveMerchantSettings(merchantId, settings);
-  try { await setDoc(doc(db, 'yupos_config', `${merchantId}_settings`), settings, { merge: true }); return true; }
-  catch (err) { console.warn('Firebase config sync warning:', err); return false; }
-}
-export async function syncProductsToFirebase(products: ProductItem[], merchantId: string = 'default', businessType: BusinessType = 'barbershop'): Promise<boolean> {
-  saveMerchantProducts(merchantId, businessType, products);
-  try { await setDoc(doc(db, 'yupos_catalog', `${merchantId}_${businessType}_products`), { items: products, updatedAt: Date.now() }, { merge: true }); return true; }
-  catch (err) { console.warn('Firebase products sync warning:', err); return false; }
-}
-export async function syncOrdersToFirebase(orders: Order[], merchantId: string = 'default', businessType: BusinessType = 'barbershop'): Promise<boolean> {
-  const key = getMerchantStorageKey(merchantId, businessType, 'orders');
-  const localCurrent = loadLocalData<Order[]>(key, []);
-  const localNormalized = normalizeOrderIds(orders, new Set(localCurrent.map((order) => String(order.id || ''))));
-  saveLocalData(key, localNormalized);
+export async function syncConfigToFirebase(settings: StoreSettings, merchantId: string = ''): Promise<boolean> {
   try {
-    const ordersRef = doc(db, 'yupos_transactions', `${merchantId}_${businessType}_orders`);
+    const id = requireMerchantId(merchantId);
+    saveMerchantSettings(id, settings);
+    await setDoc(doc(db, 'yupos_config', id, 'settings', 'data'), { ...settings, merchantId: id }, { merge: true });
+    return true;
+  } catch (err) { console.warn('Firebase config sync warning:', err); return false; }
+}
+export async function syncProductsToFirebase(products: ProductItem[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  try {
+    const id = requireMerchantId(merchantId);
+    saveMerchantProducts(id, businessType, products);
+    const sanitized = products.map((product) => ({ ...product, merchantId: id, businessType }));
+    await setDoc(doc(db, 'yupos_catalog', id, businessType, 'products'), { items: sanitized, merchantId: id, businessType, updatedAt: Date.now() }, { merge: true });
+    return true;
+  } catch (err) { console.warn('Firebase products sync warning:', err); return false; }
+}
+export async function syncOrdersToFirebase(orders: Order[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  try {
+    const id = requireMerchantId(merchantId);
+    const key = getMerchantStorageKey(id, businessType, 'orders');
+    const localCurrent = loadLocalData<Order[]>(key, []);
+    const localNormalized = normalizeOrderIds(orders.map((order) => ({ ...order, merchantId: id, businessType })), new Set(localCurrent.map((order) => String(order.id || ''))));
+    saveLocalData(key, localNormalized);
+    const ordersRef = doc(db, 'yupos_transactions', id, businessType, 'orders');
     await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(ordersRef);
       const remoteOrders = snapshot.exists() ? ((snapshot.data().list || []) as Order[]) : [];
       const remoteById = new Map<string, Order>(remoteOrders.map((order) => [String(order.id || ''), order]));
       const merged = [...remoteOrders];
       for (const incoming of localNormalized) {
-        const id = String(incoming.id || '');
-        const remote = remoteById.get(id);
-        if (!remote) { merged.push(incoming); continue; }
-        if (Number(remote.timestamp) === Number(incoming.timestamp)) {
-          const index = merged.findIndex((order) => String(order.id || '') === id);
-          if (index >= 0) merged[index] = incoming;
+        const safeIncoming = { ...incoming, merchantId: id, businessType };
+        const orderId = String(safeIncoming.id || '');
+        const remote = remoteById.get(orderId);
+        if (!remote) { merged.push(safeIncoming); continue; }
+        if (Number(remote.timestamp) === Number(safeIncoming.timestamp)) {
+          const index = merged.findIndex((order) => String(order.id || '') === orderId);
+          if (index >= 0) merged[index] = safeIncoming;
         } else {
           let replacementId = createCollisionSafeOrderId();
           while (remoteById.has(replacementId) || merged.some((order) => String(order.id || '') === replacementId)) replacementId = createCollisionSafeOrderId();
-          const replacement = { ...incoming, id: replacementId };
-          merged.push(replacement);
-          incoming.id = replacementId;
+          merged.push({ ...safeIncoming, id: replacementId });
         }
       }
-      const finalList = normalizeOrderIds(merged);
-      transaction.set(ordersRef, { list: finalList, updatedAt: Date.now() }, { merge: true });
+      const finalList = normalizeOrderIds(merged).map((order) => ({ ...order, merchantId: id, businessType }));
+      transaction.set(ordersRef, { list: finalList, merchantId: id, businessType, updatedAt: Date.now() }, { merge: true });
       saveLocalData(key, finalList);
     });
     return true;
   } catch (err) { console.warn('Firebase orders sync warning:', err); return false; }
 }
-export async function syncExpensesToFirebase(expenses: Expense[], merchantId: string = 'default', businessType: BusinessType = 'barbershop'): Promise<boolean> {
-  saveMerchantExpenses(merchantId, businessType, expenses);
-  try { await setDoc(doc(db, 'yupos_finances', `${merchantId}_${businessType}_expenses`), { list: expenses, updatedAt: Date.now() }, { merge: true }); return true; }
-  catch (err) { console.warn('Firebase expenses sync warning:', err); return false; }
+export async function syncExpensesToFirebase(expenses: Expense[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  try {
+    const id = requireMerchantId(merchantId);
+    saveMerchantExpenses(id, businessType, expenses);
+    await setDoc(doc(db, 'yupos_finances', id, businessType, 'expenses'), { list: expenses, merchantId: id, businessType, updatedAt: Date.now() }, { merge: true });
+    return true;
+  } catch (err) { console.warn('Firebase expenses sync warning:', err); return false; }
 }
-export async function syncPettyCashToFirebase(amount: number, merchantId: string = 'default', businessType: BusinessType = 'barbershop'): Promise<boolean> {
-  saveMerchantPettyCash(merchantId, businessType, amount);
-  try { await setDoc(doc(db, 'yupos_finances', `${merchantId}_${businessType}_pettyCash`), { amount, updatedAt: Date.now() }, { merge: true }); return true; }
-  catch (err) { console.warn('Firebase petty cash sync warning:', err); return false; }
+export async function syncPettyCashToFirebase(amount: number, merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  try {
+    const id = requireMerchantId(merchantId);
+    saveMerchantPettyCash(id, businessType, amount);
+    await setDoc(doc(db, 'yupos_finances', id, businessType, 'pettyCash'), { amount, merchantId: id, businessType, updatedAt: Date.now() }, { merge: true });
+    return true;
+  } catch (err) { console.warn('Firebase petty cash sync warning:', err); return false; }
 }
