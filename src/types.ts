@@ -131,6 +131,8 @@ export interface PortalPins {
 
 export interface StoreSettings {
   businessType: BusinessType;
+  /** Merchant-defined business label shown throughout the POS UI. */
+  customBusinessTypeName?: string;
   storeName: string;
   storeAddress: string;
   storePhone: string;
