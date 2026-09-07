@@ -1,21 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, RefreshCw, Rocket, Sparkles, X } from 'lucide-react';
 
-const YUPOS_RELEASE_VERSION = '2.3.8';
+const YUPOS_RELEASE_VERSION = '2.3.9';
 const YUPOS_BUILD_ID = import.meta.env.VITE_BUILD_ID || YUPOS_RELEASE_VERSION;
 const YUPOS_BUILD_KEY = 'yupos_last_seen_build';
 
+// Hanya berisi perubahan pada release ini. Fitur dari release sebelumnya tidak diulang.
 const CHANGELOG = [
-  'Layout struk thermal diperbarui untuk 58 mm dan 80 mm dengan margin, spacing, posisi logo, dan alignment yang lebih konsisten.',
-  'QR Membership dibuat jauh lebih besar dan tajam dengan quiet zone 4 modul serta kotak QR berukuran integer agar hasil thermal mudah dipindai kamera HP.',
-  'Barcode Code128 dihapus sepenuhnya dari preview, gambar struk, dan printer Bluetooth. Membership sekarang menggunakan QR saja.',
-  'Payload QR Membership diperkecil agar jumlah modul QR tidak terlalu padat dan tetap cepat dipindai.',
-  'Detail Membership pada struk menampilkan kode member, jumlah kunjungan, dan reward yang tersedia.',
-  'Subtotal, diskon, PPN, total, dan metode pembayaran dirapikan agar struktur preview dan cetak lebih seragam.',
-  'Typography diperbaiki: nama toko, item, total, membership, kode member, dan POWERED BY YUPOS menggunakan hierarchy yang lebih jelas.',
-  'Logo thermal diraster dengan ukuran mengikuti lebar kertas dan diproses dengan kualitas lebih baik.',
-  'Footer diberi jarak yang lebih jauh dan POWERED BY YUPOS dicetak bold di bagian paling bawah.',
-  'QR generation sekarang sepenuhnya lokal sehingga tidak membutuhkan QuickChart, API key, internet, atau CORS untuk membuat QR.',
+  'Biaya Tambahan: kasir dapat menambahkan biaya manual seperti topping, upsize, extra, atau biaya layanan beserta nominalnya ke transaksi.',
+  'Kategori Menu: kategori/jenis item dapat ditambahkan sendiri, misalnya Minuman, Makanan Ringan, Dessert, Topping, dan lainnya.',
+  'Struk thermal: teks nama menu, catatan, alamat, dan informasi panjang sekarang otomatis turun ke baris berikutnya tanpa terpotong.',
+  'Alignment struk: nama toko, alamat, nomor telepon, footer, dan POWERED BY YUPOS tetap dicetak rata tengah meskipun teksnya panjang.',
+  'Kompatibilitas printer: karakter Unicode yang tidak didukung printer thermal seperti bullet (•) dan tanda kutip tipografi otomatis dikonversi ke karakter yang aman untuk ESC/POS.',
 ];
 
 async function hardRefreshYupos() {
@@ -64,7 +60,7 @@ export const UpdateNotice: React.FC = () => {
         <button type="button" className="yupos-update-close" onClick={dismiss} aria-label="Tutup informasi update"><X className="w-4 h-4" /></button>
         <div className="yupos-update-body">
           <div className="yupos-update-heading-row"><div><div className="yupos-update-eyebrow">ABOUT UPDATE</div><h2 id="yupos-update-title" className="yupos-update-title">YUPOS diperbarui</h2></div><span className="yupos-update-version">V{YUPOS_RELEASE_VERSION}</span></div>
-          <p className="yupos-update-description">Build YUPOS terbaru sudah berhasil diterapkan. Informasi ini muncul satu kali untuk setiap deployment baru.</p>
+          <p className="yupos-update-description">Perubahan terbaru pada build ini. Fitur dari update sebelumnya tidak ditampilkan kembali.</p>
           <div className="yupos-update-list">{CHANGELOG.map((item,index)=><div className="yupos-update-item" key={item}><span className="yupos-update-number">{index+1}</span><span>{item}</span></div>)}</div>
           <button type="button" onClick={refresh} disabled={refreshing} className="yupos-update-refresh"><RefreshCw className={`w-5 h-5 ${refreshing?'animate-spin':''}`} /><span>{refreshing?'Memuat ulang...':'Refresh'}</span></button>
           <div className="yupos-update-note"><CheckCircle2 className="w-4 h-4" /><span>Refresh akan membersihkan cache aplikasi dan memuat build YUPOS terbaru.</span></div>
