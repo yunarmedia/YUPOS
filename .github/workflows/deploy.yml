@@ -63,7 +63,8 @@ jobs:
   deploy-firestore-rules:
     name: Deploy Firestore Rules
     runs-on: ubuntu-latest
-    if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    env:
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
     steps:
       - name: Checkout
@@ -75,8 +76,9 @@ jobs:
           node-version: 22
 
       - name: Deploy Firestore Rules
+        if: ${{ env.FIREBASE_SERVICE_ACCOUNT != '' }}
         uses: w9jds/firebase-action@v13.35.1
         env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GCP_SA_KEY: ${{ env.FIREBASE_SERVICE_ACCOUNT }}
         with:
           args: deploy --only firestore:rules --project yuposcashier
