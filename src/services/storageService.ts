@@ -22,6 +22,10 @@ function requireMerchantId(merchantId: string): string {
   return id;
 }
 
+function isValidMerchantId(merchantId: string): boolean {
+  try { requireMerchantId(merchantId); return true; } catch { return false; }
+}
+
 export function getMerchantStorageKey(merchantId: string, businessType: BusinessType | string, dataType: 'products' | 'orders' | 'expenses' | 'pettyCash' | 'settings'): string {
   const mId = requireMerchantId(merchantId);
   if (dataType === 'settings') return `yupos_${mId}_settings`;
@@ -38,19 +42,19 @@ export function saveLocalData<T>(key: string, value: T): void {
 }
 
 export function loadMerchantSettings(merchantId: string): StoreSettings {
-  if (!String(merchantId || '').trim()) return { ...defaultSettings };
+  if (!isValidMerchantId(merchantId)) return { ...defaultSettings };
   const key = getMerchantStorageKey(merchantId, 'default', 'settings');
   const saved = loadLocalData<StoreSettings | null>(key, null);
   if (!saved) return { ...defaultSettings };
   return { ...defaultSettings, ...saved, shift1Start: saved.shift1Start || '10:00', shift1End: saved.shift1End || '13:00', shift2Start: saved.shift2Start || '13:00', shift2End: saved.shift2End || '22:00' };
 }
 export function saveMerchantSettings(merchantId: string, settings: StoreSettings): void {
-  const id = requireMerchantId(merchantId);
-  saveLocalData(getMerchantStorageKey(id, 'default', 'settings'), settings);
+  if (!isValidMerchantId(merchantId)) return;
+  saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), settings);
 }
 
 export function loadMerchantProducts(merchantId: string, businessType: BusinessType): ProductItem[] {
-  if (!String(merchantId || '').trim()) return [];
+  if (!isValidMerchantId(merchantId)) return [];
   const key = getMerchantStorageKey(merchantId, businessType, 'products');
   const raw = localStorage.getItem(key);
   if (raw) { try { return (JSON.parse(raw) as ProductItem[]).map((it) => ({ ...it, businessType, merchantId })); } catch {} }
@@ -60,6 +64,7 @@ export function loadMerchantProducts(merchantId: string, businessType: BusinessT
   return initialItems;
 }
 export function saveMerchantProducts(merchantId: string, businessType: BusinessType, products: ProductItem[]): void {
+  if (!isValidMerchantId(merchantId)) return;
   const id = requireMerchantId(merchantId);
   const sanitized = products.map((product) => ({ ...product, merchantId: id, businessType }));
   saveLocalData(getMerchantStorageKey(id, businessType, 'products'), sanitized);
@@ -90,7 +95,7 @@ function normalizeOrderIds(orders: Order[], existingIds: Set<string> = new Set()
 }
 
 export function loadMerchantOrders(merchantId: string, businessType: BusinessType): Order[] {
-  if (!String(merchantId || '').trim()) return [];
+  if (!isValidMerchantId(merchantId)) return [];
   const key = getMerchantStorageKey(merchantId, businessType, 'orders');
   const raw = localStorage.getItem(key);
   if (raw) { try { return normalizeOrderIds(JSON.parse(raw) as Order[]); } catch {} }
@@ -98,6 +103,7 @@ export function loadMerchantOrders(merchantId: string, businessType: BusinessTyp
 }
 
 export function saveMerchantOrders(merchantId: string, businessType: BusinessType, orders: Order[]): void {
+  if (!isValidMerchantId(merchantId)) return;
   const id = requireMerchantId(merchantId);
   const key = getMerchantStorageKey(id, businessType, 'orders');
   const current = loadLocalData<Order[]>(key, []);
@@ -107,21 +113,24 @@ export function saveMerchantOrders(merchantId: string, businessType: BusinessTyp
 }
 
 export function loadMerchantExpenses(merchantId: string, businessType: BusinessType): Expense[] {
-  if (!String(merchantId || '').trim()) return [];
+  if (!isValidMerchantId(merchantId)) return [];
   const key = getMerchantStorageKey(merchantId, businessType, 'expenses');
   const raw = localStorage.getItem(key);
-  if (raw) { try { return JSON.parse(raw); } catch {} }
+  if (raw) { try { return (JSON.parse(raw) as Expense[]).map((expense) => ({ ...expense, merchantId, businessType })); } catch {} }
   return [];
 }
 export function saveMerchantExpenses(merchantId: string, businessType: BusinessType, expenses: Expense[]): void {
+  if (!isValidMerchantId(merchantId)) return;
   const id = requireMerchantId(merchantId);
-  saveLocalData(getMerchantStorageKey(id, businessType, 'expenses'), expenses);
+  const sanitized = expenses.map((expense) => ({ ...expense, merchantId: id, businessType }));
+  saveLocalData(getMerchantStorageKey(id, businessType, 'expenses'), sanitized);
 }
 export function loadMerchantPettyCash(merchantId: string, businessType: BusinessType): number {
-  if (!String(merchantId || '').trim()) return 0;
+  if (!isValidMerchantId(merchantId)) return 0;
   return loadLocalData<number>(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), 0);
 }
 export function saveMerchantPettyCash(merchantId: string, businessType: BusinessType, amount: number): void {
+  if (!isValidMerchantId(merchantId)) return;
   const id = requireMerchantId(merchantId);
   saveLocalData(getMerchantStorageKey(id, businessType, 'pettyCash'), amount);
 }
@@ -181,7 +190,8 @@ export async function syncExpensesToFirebase(expenses: Expense[], merchantId: st
   try {
     const id = requireMerchantId(merchantId);
     saveMerchantExpenses(id, businessType, expenses);
-    await setDoc(doc(db, 'yupos_finances', id, businessType, 'expenses'), { list: expenses, merchantId: id, businessType, updatedAt: Date.now() }, { merge: true });
+    const sanitized = expenses.map((expense) => ({ ...expense, merchantId: id, businessType }));
+    await setDoc(doc(db, 'yupos_finances', id, businessType, 'expenses'), { list: sanitized, merchantId: id, businessType, updatedAt: Date.now() }, { merge: true });
     return true;
   } catch (err) { console.warn('Firebase expenses sync warning:', err); return false; }
 }
