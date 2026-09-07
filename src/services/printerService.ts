@@ -38,7 +38,44 @@ export async function sendBluetoothData(characteristic: BluetoothRemoteGATTChara
   for (let offset = 0; offset < payload.length; offset += maxChunkSize) { const chunk = payload.slice(offset, Math.min(offset + maxChunkSize, payload.length)); if (characteristic.properties.write && typeof characteristic.writeValue === 'function') await characteristic.writeValue(chunk); else if (characteristic.properties.writeWithoutResponse && typeof characteristic.writeValueWithoutResponse === 'function') await characteristic.writeValueWithoutResponse(chunk); else throw new Error('Channel printer tidak memiliki izin write.'); await new Promise((resolve) => setTimeout(resolve, 35)); }
 }
 function line(width: number): string { return '-'.repeat(width); }
-function columns(left: string, right: string, width: number): string { const r = right.slice(0, width); const l = left.slice(0, Math.max(0, width - r.length - 1)); return l + ' '.repeat(Math.max(1, width - l.length - r.length)) + r; }
+function columns(left: string, right: string, width: number): string {
+  const normalizedLeft = left.trim();
+  const normalizedRight = right.trim();
+  const gap = 1;
+  if (normalizedRight.length >= width) return normalizedLeft + '\n' + wrapText(normalizedRight, width).join('\n');
+  const availableLeft = Math.max(1, width - normalizedRight.length - gap);
+  const leftLines = wrapText(normalizedLeft, availableLeft);
+  const first = leftLines.shift() || '';
+  const firstLine = first + ' '.repeat(Math.max(1, width - first.length - normalizedRight.length)) + normalizedRight;
+  return [firstLine, ...leftLines].join('\n');
+}
+function wrapText(value: string, width: number): string[] {
+  const safeWidth = Math.max(1, width);
+  if (!value) return [''];
+  const result: string[] = [];
+  for (const rawLine of value.replace(/\r\n?/g, '\n').split('\n')) {
+    let remaining = rawLine.trim();
+    if (!remaining) { result.push(''); continue; }
+    while (remaining.length > safeWidth) {
+      let cut = remaining.lastIndexOf(' ', safeWidth);
+      if (cut <= 0) cut = safeWidth;
+      result.push(remaining.slice(0, cut).trimEnd());
+      remaining = remaining.slice(cut).trimStart();
+    }
+    result.push(remaining);
+  }
+  return result;
+}
+function prefixedWrap(prefix: string, value: string, width: number): string[] {
+  const cleanValue = value.trim();
+  if (!cleanValue) return [prefix.trimEnd()];
+  const firstWidth = Math.max(1, width - prefix.length);
+  const firstLines = wrapText(cleanValue, firstWidth);
+  const lines = [`${prefix}${firstLines.shift() || ''}`];
+  const continuationIndent = ' '.repeat(prefix.length);
+  const continuationLines = firstLines.flatMap((line) => wrapText(line, Math.max(1, width - continuationIndent.length)));
+  return lines.concat(continuationLines.map((line) => `${continuationIndent}${line}`));
+}
 function loadImage(src: string): Promise<HTMLImageElement> { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('Gagal memuat gambar printer.')); image.src = src; }); }
 function canvasToRaster(canvas: HTMLCanvasElement): Uint8Array {
   const width = Math.max(8, Math.floor(canvas.width / 8) * 8); const height = canvas.height; const ctx = canvas.getContext('2d', { willReadFrequently: true }); if (!ctx) throw new Error('Canvas printer tidak tersedia.'); const pixels = ctx.getImageData(0, 0, width, height).data; const bytesPerRow = width / 8; const raster = new Uint8Array(bytesPerRow * height);
@@ -54,13 +91,23 @@ async function makeQrRaster(value: string, targetWidth: number): Promise<Uint8Ar
 function center(command:(...values:number[])=>void,text:(value:string)=>void,value:string):void{command(0x1b,0x61,0x01);text(value+'\n');command(0x1b,0x61,0x00);}
 function bold(command:(...values:number[])=>void,text:(value:string)=>void,value:string):void{command(0x1b,0x45,0x01);text(value+'\n');command(0x1b,0x45,0x00);}
 export async function buildReceiptEscPos(order: Order, settings: StoreSettings): Promise<Uint8Array> {
-  const is80=settings.printerPaperWidth==='80mm'; const paperChars=is80?48:32; const pixelWidth=is80?576:384; const qrWidth=is80?384:320; const encoder=new TextEncoder(); const safe=(v:unknown)=>String(v??'').replace(/[\u0000-\u001F]/g,' ').replace(/[^\x20-\x7E]/g,' ').trim(); const preserveLayout=(v:unknown)=>String(v??'').replace(/\r\n?/g,'\n').replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g,'').replace(/[^\x0A\x20-\x7E]/g,' ').split('\n').map((row)=>row.slice(0,paperChars)).join('\n'); const money=(v:number)=>`Rp${new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Math.round(v||0))};`; const bytes:number[]=[0x1b,0x40,0x1b,0x33,0x26]; const text=(v:string)=>bytes.push(...encoder.encode(v)); const command=(...v:number[])=>bytes.push(...v); const append=(d:Uint8Array)=>bytes.push(...d); const spacer=()=>text('\n');
+  const is80=settings.printerPaperWidth==='80mm'; const paperChars=is80?48:32; const pixelWidth=is80?576:384; const qrWidth=is80?384:320; const encoder=new TextEncoder(); const safe=(v:unknown)=>String(v??'').replace(/[\u0000-\u001F]/g,' ').replace(/[^\x20-\x7E]/g,' ').trim(); const preserveLayout=(v:unknown)=>wrapText(String(v??'').replace(/\r\n?/g,'\n').replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g,'').replace(/[^\x0A\x20-\x7E]/g,' '),paperChars).join('\n'); const bytes:number[]=[0x1b,0x40,0x1b,0x33,0x26]; const text=(v:string)=>bytes.push(...encoder.encode(v)); const command=(...v:number[])=>bytes.push(...v); const append=(d:Uint8Array)=>bytes.push(...d); const spacer=()=>text('\n');
   const moneyFixed=(v:number)=>`Rp${new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Math.round(v||0))}`;
   if(settings.logoBase64){try{command(0x1b,0x61,0x01);append(await makeLogoRaster(settings.logoBase64,Math.round(pixelWidth*.68)));spacer();command(0x1b,0x61,0x00);}catch(e){console.warn('YUPOS printer logo skipped:',e);}}
-  command(0x1b,0x61,0x01);bold(command,text,safe(settings.storeName||'YUPOS'));command(0x1b,0x61,0x00);if(settings.storeAddress){text(preserveLayout(settings.storeAddress));text('\n');}if(settings.storePhone)text(`Telp: ${safe(settings.storePhone)}\n`);text(line(paperChars)+'\n');
-  text(`No : ${safe(order.id)}\n`);text(`Tgl: ${safe(order.date)} ${safe(order.time)}\n`);text(`Kasir: ${safe(order.cashierName||(order.shift==='1'?settings.shift1Name:settings.shift2Name)||'Kasir')} (S${safe(order.shift)})\n`);if(order.customer&&order.customer!=='Pelanggan')text(`Pelanggan: ${safe(order.customer)}\n`);text(line(paperChars)+'\n');
-  for(const item of order.items){bold(command,text,safe(item.name).slice(0,paperChars));if(settings.businessType==='barbershop'&&item.assignedTo){command(0x1b,0x61,0x00);text(`  Petugas: ${safe(item.assignedTo).slice(0,paperChars-11)}\n`);}text(columns(`${item.qty} x ${moneyFixed(item.price)}`,moneyFixed(item.qty*item.price),paperChars)+'\n');if(item.note)text(`  Catatan: ${safe(item.note).slice(0,paperChars-12)}\n`);spacer();}
-  text(line(paperChars)+'\n');text(columns('Subtotal',moneyFixed(order.subtotal),paperChars)+'\n');if(order.discount>0)text(columns('Diskon',`-${moneyFixed(order.discount)}`,paperChars)+'\n');if((order.ppn??0)>0)text(columns(`PPN ${order.ppnRate??11}%`,moneyFixed(order.ppn??0),paperChars)+'\n');bold(command,text,columns('TOTAL',moneyFixed(order.total),paperChars));text(columns('Pembayaran',safe(order.payment).toUpperCase(),paperChars)+'\n');
-  if(settings.businessType==='barbershop'&&order.customerIsMember&&order.customerCode){try{const{loadCustomers}=await import('./customerService');const{buildMembershipScanUrl,getMembershipReward}=await import('./membershipService');const customer=loadCustomers(order.merchantId||'default_merchant').find((c)=>c.customerCode===order.customerCode);if(customer){text(line(paperChars)+'\n');center(command,text,'MEMBERSHIP CUSTOMER');center(command,text,'Scan QR untuk cek kunjungan');center(command,text,'& reward membership');command(0x1b,0x61,0x01);append(await makeQrRaster(buildMembershipScanUrl(customer),qrWidth));text('\n');command(0x1b,0x61,0x00);bold(command,text,`${safe(customer.customerCode)} • ${customer.visitCount||0}/10 KUNJUNGAN`);const reward=getMembershipReward(customer);if(reward==='freeHaircut')center(command,text,'REWARD: CUKUR GRATIS');else if(reward==='discount50')center(command,text,'REWARD: DISKON 50%');spacer();}}catch(e){console.warn('YUPOS membership QR skipped:',e);}}
+  command(0x1b,0x61,0x01);bold(command,text,safe(settings.storeName||'YUPOS'));command(0x1b,0x61,0x00);if(settings.storeAddress){text(preserveLayout(settings.storeAddress));text('\n');}if(settings.storePhone)text(prefixedWrap('Telp: ',safe(settings.storePhone),paperChars).join('\n')+'\n');text(line(paperChars)+'\n');
+  for(const lineText of prefixedWrap('No : ',safe(order.id),paperChars)) text(lineText+'\n');
+  for(const lineText of prefixedWrap('Tgl: ',`${safe(order.date)} ${safe(order.time)}`,paperChars)) text(lineText+'\n');
+  for(const lineText of prefixedWrap('Kasir: ',`${safe(order.cashierName||(order.shift==='1'?settings.shift1Name:settings.shift2Name)||'Kasir')} (S${safe(order.shift)})`,paperChars)) text(lineText+'\n');
+  if(order.customer&&order.customer!=='Pelanggan') for(const lineText of prefixedWrap('Pelanggan: ',safe(order.customer),paperChars)) text(lineText+'\n');
+  text(line(paperChars)+'\n');
+  for(const item of order.items){
+    for(const lineText of wrapText(safe(item.name),paperChars)) bold(command,text,lineText);
+    if(settings.businessType==='barbershop'&&item.assignedTo){command(0x1b,0x61,0x00);for(const lineText of prefixedWrap('  Petugas: ',safe(item.assignedTo),paperChars)) text(lineText+'\n');}
+    text(columns(`${item.qty} x ${moneyFixed(item.price)}`,moneyFixed(item.qty*item.price),paperChars)+'\n');
+    if(item.note) text(prefixedWrap('  Catatan: ',safe(item.note),paperChars).join('\n')+'\n');
+    spacer();
+  }
+  text(line(paperChars)+'\n');text(columns('Subtotal',moneyFixed(order.subtotal),paperChars)+'\n');if(order.discount>0)text(columns('Diskon',`-${moneyFixed(order.discount)}`,paperChars)+'\n');if((order.ppn??0)>0)text(columns(`PPN ${order.ppnRate??11}%`,moneyFixed(order.ppn??0),paperChars)+'\n');bold(command,text,columns('TOTAL',moneyFixed(order.total),paperChars));text('\n');text(columns('Pembayaran',safe(order.payment).toUpperCase(),paperChars)+'\n');
+  if(settings.businessType==='barbershop'&&order.customerIsMember&&order.customerCode){try{const{loadCustomers}=await import('./customerService');const{buildMembershipScanUrl,getMembershipReward}=await import('./membershipService');const customer=loadCustomers(order.merchantId||'default_merchant').find((c)=>c.customerCode===order.customerCode);if(customer){text(line(paperChars)+'\n');center(command,text,'MEMBERSHIP CUSTOMER');center(command,text,'Scan QR untuk cek kunjungan');center(command,text,'& reward membership');command(0x1b,0x61,0x01);append(await makeQrRaster(buildMembershipScanUrl(customer),qrWidth));text('\n');command(0x1b,0x61,0x00);for(const lineText of wrapText(`${safe(customer.customerCode)} • ${customer.visitCount||0}/10 KUNJUNGAN`,paperChars)) bold(command,text,lineText);const reward=getMembershipReward(customer);if(reward==='freeHaircut')center(command,text,'REWARD: CUKUR GRATIS');else if(reward==='discount50')center(command,text,'REWARD: DISKON 50%');spacer();}}catch(e){console.warn('YUPOS membership QR skipped:',e);}}
   text(line(paperChars)+'\n');command(0x1b,0x61,0x00);if(settings.footer){text(preserveLayout(settings.footer));text('\n');}else{center(command,text,'Terima kasih atas kunjungan Anda!');}text('\n\n\n');bold(command,text,'POWERED BY YUPOS');text('\n\n');command(0x1b,0x32);command(0x1d,0x56,0x00);return new Uint8Array(bytes);
 }
