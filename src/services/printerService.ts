@@ -89,8 +89,9 @@ function printerSafeText(value: unknown): string {
     .replace(/[‘’]/g, "'")
     .replace(/…/g, '...')
     .replace(/·/g, '.')
-    .replace(/[\u0000-\u001F\u007F]/g, ' ')
-    .replace(/[^\x20-\x7E]/g, ' ')
+    // Preserve explicit line breaks so footer text keeps the exact Enter spacing.
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ')
+    .replace(/[^\x0A\x20-\x7E]/g, ' ')
     .trim();
 }
 function loadImage(src: string): Promise<HTMLImageElement> { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('Gagal memuat gambar printer.')); image.src = src; }); }
