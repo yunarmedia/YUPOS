@@ -10,6 +10,15 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/merchants/$(merchantId));
     }
 
+    // Developer authorization is based on the authenticated Firebase UID and
+    // the server-controlled admins/{uid} profile. No email/localStorage trust.
+    function isDeveloperAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'developer'
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+    }
+
     // YUPOS lifetime license: access is controlled only by the developer/admin
     // through licenseStatus. There is no expiration date.
     function isLicensedMerchant(merchantId) {
@@ -22,10 +31,17 @@ service cloud.firestore {
       return !('merchantId' in request.resource.data) || request.resource.data.merchantId == merchantId;
     }
 
+    // Developer profile is server-controlled. The developer may read only its
+    // own authorization document; writes must go through trusted backend/admin tooling.
+    match /admins/{adminId} {
+      allow read: if isDeveloperAdmin() && request.auth.uid == adminId;
+      allow write: if false;
+    }
+
     // Merchant profiles are developer-controlled license records.
-    // Merchants may read only their own profile; clients cannot create/update/delete profiles.
+    // Merchants may read only their own profile; developer admins may read all.
     match /merchants/{merchantId} {
-      allow read: if isMerchant(merchantId);
+      allow read: if isMerchant(merchantId) || isDeveloperAdmin();
       allow write: if false;
     }
 
