@@ -6,38 +6,56 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == merchantId;
     }
 
+    function merchantProfileExists(merchantId) {
+      return exists(/databases/$(database)/documents/merchants/$(merchantId));
+    }
+
+    function isLicensedMerchant(merchantId) {
+      return isMerchant(merchantId)
+        && merchantProfileExists(merchantId)
+        && get(/databases/$(database)/documents/merchants/$(merchantId)).data.licenseStatus == 'active'
+        && get(/databases/$(database)/documents/merchants/$(merchantId)).data.licenseExpiresAt > request.time;
+    }
+
     function merchantFieldMatches(merchantId) {
       return !('merchantId' in request.resource.data) || request.resource.data.merchantId == merchantId;
     }
 
-    match /yupos_config/{merchantId}/settings/{document} {
+    // Merchant profiles are developer-controlled license records.
+    // Merchants may read only their own profile; clients cannot create/update/delete profiles.
+    match /merchants/{merchantId} {
       allow read: if isMerchant(merchantId);
-      allow create, update: if isMerchant(merchantId) && merchantFieldMatches(merchantId);
-      allow delete: if isMerchant(merchantId);
+      allow write: if false;
+    }
+
+    match /yupos_config/{merchantId}/settings/{document} {
+      allow read: if isLicensedMerchant(merchantId);
+      allow create, update: if isLicensedMerchant(merchantId) && merchantFieldMatches(merchantId);
+      allow delete: if isLicensedMerchant(merchantId);
     }
 
     match /yupos_catalog/{merchantId}/{businessType}/{document} {
-      allow read: if isMerchant(merchantId);
-      allow create, update: if isMerchant(merchantId) && merchantFieldMatches(merchantId);
-      allow delete: if isMerchant(merchantId);
+      allow read: if isLicensedMerchant(merchantId);
+      allow create, update: if isLicensedMerchant(merchantId) && merchantFieldMatches(merchantId);
+      allow delete: if isLicensedMerchant(merchantId);
     }
 
     match /yupos_transactions/{merchantId}/{businessType}/{document} {
-      allow read: if isMerchant(merchantId);
-      allow create, update: if isMerchant(merchantId) && merchantFieldMatches(merchantId);
-      allow delete: if isMerchant(merchantId);
+      allow read: if isLicensedMerchant(merchantId);
+      allow create, update: if isLicensedMerchant(merchantId) && merchantFieldMatches(merchantId);
+      allow delete: if isLicensedMerchant(merchantId);
     }
 
     match /yupos_finances/{merchantId}/{businessType}/{document} {
-      allow read: if isMerchant(merchantId);
-      allow create, update: if isMerchant(merchantId) && merchantFieldMatches(merchantId);
-      allow delete: if isMerchant(merchantId);
+      allow read: if isLicensedMerchant(merchantId);
+      allow create, update: if isLicensedMerchant(merchantId) && merchantFieldMatches(merchantId);
+      allow delete: if isLicensedMerchant(merchantId);
     }
 
     match /yupos_crm/{merchantId}/customers/{document} {
-      allow read: if isMerchant(merchantId);
-      allow create, update: if isMerchant(merchantId) && merchantFieldMatches(merchantId);
-      allow delete: if isMerchant(merchantId);
+      allow read: if isLicensedMerchant(merchantId);
+      allow create, update: if isLicensedMerchant(merchantId) && merchantFieldMatches(merchantId);
+      allow delete: if isLicensedMerchant(merchantId);
     }
 
     match /{document=**} {
