@@ -25,7 +25,7 @@ async function drawMembershipQr(ctx: CanvasRenderingContext2D, value: string, x:
 export async function buildReceiptImage(order: Order, settings: StoreSettings): Promise<File> {
   const width = 800; const padding = 42; const contentWidth = width - padding * 2; const isBarbershop = settings.businessType === 'barbershop';
   let memberCustomer: Customer | null = null;
-  if (isBarbershop && order.customerIsMember && order.customerCode) { try { memberCustomer = loadCustomers(order.merchantId || 'default_merchant').find((customer) => customer.customerCode === order.customerCode) || null; } catch { memberCustomer = null; } }
+  if (isBarbershop && order.customerIsMember && order.customerCode) { try { memberCustomer = loadCustomers(order.merchantId || '').find((customer) => customer.customerCode === order.customerCode) || null; } catch { memberCustomer = null; } }
 
   const lineCount = order.items.reduce((sum, item) => sum + Math.max(1, Math.ceil(String(item.name || '').length / 24)), 0);
   const estimatedHeight = 700 + order.items.length * 98 + lineCount * 28 + (memberCustomer ? 560 : 0) + Math.ceil((settings.footer || '').length / 60) * 28;

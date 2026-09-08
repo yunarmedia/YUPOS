@@ -21,7 +21,7 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, onSaveCus
   const [formIsMember, setFormIsMember] = useState(false);
   const [formNotes, setFormNotes] = useState('');
 
-  const merchantId = useMemo(() => { try { return JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || 'default_merchant'; } catch { return 'default_merchant'; } }, []);
+  const merchantId = useMemo(() => { try { return JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || ''; } catch { return ''; } }, []);
   const businessType = useMemo(() => loadMerchantSettings(merchantId).businessType, [merchantId]);
   const isBarbershop = businessType === 'barbershop';
   const previewCode = useMemo(() => (!formName.trim() && !formPhone.trim()) ? '--' : generateCustomerCode(formName || 'Customer', formPhone || '0000'), [formName, formPhone]);

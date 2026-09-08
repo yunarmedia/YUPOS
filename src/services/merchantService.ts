@@ -4,7 +4,7 @@ import { MerchantProfile, MerchantLicenseStatus } from '../types';
 
 export async function getMerchantProfile(uid: string): Promise<MerchantProfile | null> {
   const id = String(uid || '').trim();
-  if (!id || id === 'default' || id === 'default_merchant' || id === 'merchant_default') return null;
+  if (!id || id === 'default' || id === '' || id === 'merchant_default') return null;
 
   const snapshot = await getDoc(doc(db, 'merchants', id));
   if (!snapshot.exists()) return null;

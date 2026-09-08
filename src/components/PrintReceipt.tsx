@@ -9,7 +9,7 @@ interface PrintReceiptProps { order: Order | null; settings: StoreSettings; }
 export const PrintReceipt: React.FC<PrintReceiptProps> = ({ order, settings }) => {
   const memberCustomer = useMemo<Customer | null>(() => {
     if (!order || settings.businessType !== 'barbershop' || !order.customerIsMember || !order.customerCode) return null;
-    try { return loadCustomers(order.merchantId || 'default_merchant').find((customer) => customer.customerCode === order.customerCode) || null; }
+    try { return loadCustomers(order.merchantId || '').find((customer) => customer.customerCode === order.customerCode) || null; }
     catch { return null; }
   }, [order, settings.businessType]);
 

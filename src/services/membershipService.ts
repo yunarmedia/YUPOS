@@ -46,7 +46,7 @@ function deriveVisitDetails(customer: Customer): MembershipVisit[] {
   const stored = customer.membershipVisits || [];
   if (stored.length) return stored.slice(-10);
   try {
-    const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || 'default_merchant';
+    const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || '';
     const settingsRaw = localStorage.getItem(`yupos_${merchantId}_settings`);
     const businessType = settingsRaw ? JSON.parse(settingsRaw)?.businessType || 'barbershop' : 'barbershop';
     const orders = loadMerchantOrders(merchantId, businessType);
@@ -82,7 +82,7 @@ export function buildMembershipQrSnapshot(customer: Customer) {
   const latestOrderItems = latest
     ? (() => {
         try {
-          const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || 'default_merchant';
+          const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || '';
           const settingsRaw = localStorage.getItem(`yupos_${merchantId}_settings`);
           const businessType = settingsRaw ? JSON.parse(settingsRaw)?.businessType || 'barbershop' : 'barbershop';
           const orders = loadMerchantOrders(merchantId, businessType);

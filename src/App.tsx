@@ -104,7 +104,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('pos');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const merchantId = merchant?.uid || 'default_merchant';
+  const merchantId = merchant?.uid || '';
 
   // Core POS states with strict merchant and businessType isolation
   const [settings, setSettings] = useState<StoreSettings>(() => {
@@ -246,7 +246,7 @@ export default function App() {
       if (settings.activeShift !== expectedShift) {
         setSettings((prev) => {
           const updated = { ...prev, activeShift: expectedShift };
-          const mId = merchant?.uid || 'default_merchant';
+          const mId = merchant?.uid || '';
           saveMerchantSettings(mId, updated);
           syncConfigToFirebase(updated, mId);
           return updated;
@@ -465,7 +465,7 @@ export default function App() {
     const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     const cashierName = settings.activeShift === '1' ? settings.shift1Name : settings.shift2Name;
 
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     let savedOrder: Order;
@@ -595,7 +595,7 @@ export default function App() {
 
   // Update store settings & switch business models
   const handleUpdateSettings = (newSettings: Partial<StoreSettings>) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
 
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings };
@@ -636,7 +636,7 @@ export default function App() {
 
   // Product CRUD strictly scoped to active merchant & businessType
   const handleSaveProduct = (prodData: Omit<ProductItem, 'id'>, id?: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     if (id) {
@@ -661,7 +661,7 @@ export default function App() {
   };
 
   const handleDeleteProduct = (id: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
     const updated = products.map((p) => (p.id === id ? { ...p, deleted: true } : p));
     setProducts(updated);
@@ -672,7 +672,7 @@ export default function App() {
 
   // Expense CRUD
   const handleAddExpense = (expData: Omit<Expense, 'id'>) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     const newExp: Expense = {
@@ -689,7 +689,7 @@ export default function App() {
   };
 
   const handleUpdateExpense = (exp: Expense) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     const updated = expenses.map((e) => (String(e.id) === String(exp.id) ? exp : e));
@@ -700,7 +700,7 @@ export default function App() {
   };
 
   const handleDeleteExpense = (id: string | number) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     const updated = expenses.filter((e) => String(e.id) !== String(id));
@@ -712,7 +712,7 @@ export default function App() {
 
   // Petty Cash
   const handleSavePettyCash = (amount: number) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     setPettyCash(amount);
@@ -723,7 +723,7 @@ export default function App() {
 
   // Customer Management Handlers
   const handleSaveCustomer = (customerData: Omit<Customer, 'id'>, id?: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     let updated: Customer[];
 
     if (id) {
@@ -747,7 +747,7 @@ export default function App() {
   };
 
   const handleDeleteCustomer = (id: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const updated = customers.filter((c) => c.id !== id);
     setCustomers(updated);
     saveCustomers(currentMId, updated);
@@ -756,7 +756,7 @@ export default function App() {
   };
 
   const handleToggleMembership = (id: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const updated = customers.map((c) => {
       if (c.id === id) {
         const nextState = !c.isMember;
@@ -783,7 +783,7 @@ export default function App() {
   };
 
   const handleCancelOrder = (orderId: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     const updated = orders.map((o) => (o.id === orderId ? { ...o, status: 'batal' as const } : o));
@@ -794,7 +794,7 @@ export default function App() {
   };
 
   const handleDeleteOrderPermanently = (orderId: string) => {
-    const currentMId = merchant?.uid || 'default_merchant';
+    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     const updated = orders.filter((o) => o.id !== orderId);

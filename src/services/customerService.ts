@@ -4,7 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 
 function requireMerchantId(merchantId: string): string {
   const id = String(merchantId || '').trim();
-  if (!id || id === 'default' || id === 'default_merchant') throw new Error('Merchant authentication is required before accessing customer data.');
+  if (!id || id === 'default' || id === '') throw new Error('Merchant authentication is required before accessing customer data.');
   return id;
 }
 

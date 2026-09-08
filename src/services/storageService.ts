@@ -16,7 +16,7 @@ export const defaultSettings: StoreSettings = {
 
 function requireMerchantId(merchantId: string): string {
   const id = String(merchantId || '').trim();
-  if (!id || id === 'default' || id === 'default_merchant' || id === 'merchant_default') {
+  if (!id || id === 'default' || id === '' || id === 'merchant_default') {
     throw new Error('Merchant authentication is required before accessing merchant data.');
   }
   return id;
