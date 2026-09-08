@@ -161,3 +161,18 @@ export interface MerchantUser {
   email: string | null;
   displayName: string | null;
 }
+
+export type MerchantLicenseStatus = 'active' | 'suspended' | 'expired' | 'pending';
+
+export interface MerchantProfile {
+  uid: string;
+  businessName: string;
+  businessType: BusinessType;
+  businessTypeCustom?: string;
+  address?: string;
+  phone?: string;
+  licenseStatus: MerchantLicenseStatus;
+  licenseExpiresAt: unknown;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
