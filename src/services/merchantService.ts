@@ -18,29 +18,22 @@ export async function getMerchantProfile(uid: string): Promise<MerchantProfile |
     address: data.address,
     phone: data.phone,
     licenseStatus: (data.licenseStatus || 'pending') as MerchantLicenseStatus,
-    licenseExpiresAt: data.licenseExpiresAt,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
   };
 }
 
+/**
+ * YUPOS uses lifetime licenses: an active merchant remains licensed until
+ * the developer/admin changes the license status.
+ */
 export function isMerchantLicenseActive(profile: MerchantProfile | null): boolean {
-  if (!profile || profile.licenseStatus !== 'active') return false;
-
-  const expiry = profile.licenseExpiresAt as any;
-  if (!expiry) return false;
-
-  if (typeof expiry.toMillis === 'function') return expiry.toMillis() > Date.now();
-  if (expiry instanceof Date) return expiry.getTime() > Date.now();
-  if (typeof expiry === 'number') return expiry > Date.now();
-
-  return false;
+  return !!profile && profile.licenseStatus === 'active';
 }
 
 export function getLicenseMessage(profile: MerchantProfile | null): string {
   if (!profile) return 'Akun Anda belum terdaftar sebagai merchant YUPOS. Hubungi Developer untuk aktivasi lisensi.';
   if (profile.licenseStatus === 'suspended') return 'Lisensi YUPOS Anda sedang ditangguhkan. Hubungi Developer.';
   if (profile.licenseStatus === 'pending') return 'Lisensi YUPOS Anda belum diaktifkan. Hubungi Developer.';
-  if (profile.licenseStatus === 'expired' || !isMerchantLicenseActive(profile)) return 'Lisensi YUPOS Anda sudah tidak aktif atau telah kedaluwarsa. Hubungi Developer.';
   return '';
 }
