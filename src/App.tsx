@@ -83,16 +83,9 @@ function isTimeWithinRange(currentTimeStr: string, startStr: string, endStr: str
 }
 
 export default function App() {
-  // Authentication State - Persistent 1x login stored in localStorage
-  const [merchant, setMerchant] = useState<MerchantUser | null>(() => {
-    try {
-      const saved = localStorage.getItem('yupos_merchant_session');
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [authInitialized, setAuthInitialized] = useState(false);
+  // Authentication State — Firebase Auth is the sole source of merchant identity.
+  // localStorage is never trusted to establish or restore the active merchant.
+  const [merchant, setMerchant] = useState<MerchantUser | null>(null);
   const [splashVisible, setSplashVisible] = useState(true);
 
   useEffect(() => {
@@ -169,6 +162,16 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Every mutating operation must have an authenticated Firebase UID.
+  // Empty / fallback merchant IDs are never valid.
+  const requireMerchantId = (): string | null => {
+    const uid = merchant?.uid?.trim();
+    if (uid) return uid;
+
+    showToast('Sesi merchant tidak valid. Silakan login kembali.', 'error');
+    return null;
+  };
+
   // Play audio buzzer on key events
   const playBuzzer = () => {
     try {
@@ -204,30 +207,22 @@ export default function App() {
     }
   }, [merchant?.uid]);
 
-  // Check persistent session on mount
+  // Firebase Auth is authoritative. Do not restore merchant identity from localStorage.
   useEffect(() => {
-    const saved = localStorage.getItem('yupos_merchant_session');
-    if (saved) {
-      try {
-        setMerchant(JSON.parse(saved));
-      } catch (e) {
-        // ignore
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setMerchant(null);
+        return;
       }
-    } else {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
-        if (user) {
-          const userObj: MerchantUser = {
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName || user.email?.split('@')[0] || 'Merchant',
-          };
-          setMerchant(userObj);
-          localStorage.setItem('yupos_merchant_session', JSON.stringify(userObj));
-        }
+
+      setMerchant({
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName || user.email?.split('@')[0] || 'Merchant',
       });
-      return () => unsubscribe();
-    }
-    setAuthInitialized(true);
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Customizable Auto-shift scheduler (consumes custom hours shift1Start/End & shift2Start/End)
@@ -244,9 +239,11 @@ export default function App() {
       const expectedShift: '1' | '2' = inShift1 ? '1' : '2';
 
       if (settings.activeShift !== expectedShift) {
+        const mId = merchant?.uid?.trim();
+        if (!mId) return;
+
         setSettings((prev) => {
           const updated = { ...prev, activeShift: expectedShift };
-          const mId = merchant?.uid || '';
           saveMerchantSettings(mId, updated);
           syncConfigToFirebase(updated, mId);
           return updated;
@@ -343,7 +340,6 @@ export default function App() {
 
   // Logout handler - manual logout only
   const handleLogout = async () => {
-    localStorage.removeItem('yupos_merchant_session');
     setMerchant(null);
     try {
       await signOut(auth);
@@ -454,6 +450,9 @@ export default function App() {
       registerAsMember?: boolean;
     }
   ) => {
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
+
     const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
     const afterDiscount = Math.max(0, subtotal - discount);
     const ppnRate = settings.ppnEnabled ? (settings.ppnRate ?? 0) : 0;
@@ -465,7 +464,6 @@ export default function App() {
     const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
     const cashierName = settings.activeShift === '1' ? settings.shift1Name : settings.shift2Name;
 
-    const currentMId = merchant?.uid || '';
     const currentBType = settings.businessType;
 
     let savedOrder: Order;
@@ -561,6 +559,7 @@ export default function App() {
 
   // Print temporary cart bill
   const handlePrintCart = (customerNote: string, discount: number) => {
+    if (!requireMerchantId()) return;
     if (cart.length === 0) return;
 
     const subtotal = cart.reduce((s, i) => s + i.price * i.qty, 0);
@@ -588,14 +587,15 @@ export default function App() {
       shift: settings.activeShift,
       cashierName: settings.activeShift === '1' ? settings.shift1Name : settings.shift2Name,
       businessType: settings.businessType,
-      merchantId: merchant?.uid,
+      merchantId: merchant?.uid || undefined,
     };
     executePrintReceipt(tempOrder);
   };
 
   // Update store settings & switch business models
   const handleUpdateSettings = (newSettings: Partial<StoreSettings>) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
 
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings };
@@ -636,7 +636,8 @@ export default function App() {
 
   // Product CRUD strictly scoped to active merchant & businessType
   const handleSaveProduct = (prodData: Omit<ProductItem, 'id'>, id?: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     if (id) {
@@ -661,7 +662,8 @@ export default function App() {
   };
 
   const handleDeleteProduct = (id: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
     const updated = products.map((p) => (p.id === id ? { ...p, deleted: true } : p));
     setProducts(updated);
@@ -672,7 +674,8 @@ export default function App() {
 
   // Expense CRUD
   const handleAddExpense = (expData: Omit<Expense, 'id'>) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const newExp: Expense = {
@@ -689,7 +692,8 @@ export default function App() {
   };
 
   const handleUpdateExpense = (exp: Expense) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = expenses.map((e) => (String(e.id) === String(exp.id) ? exp : e));
@@ -700,7 +704,8 @@ export default function App() {
   };
 
   const handleDeleteExpense = (id: string | number) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = expenses.filter((e) => String(e.id) !== String(id));
@@ -712,7 +717,8 @@ export default function App() {
 
   // Petty Cash
   const handleSavePettyCash = (amount: number) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     setPettyCash(amount);
@@ -723,7 +729,8 @@ export default function App() {
 
   // Customer Management Handlers
   const handleSaveCustomer = (customerData: Omit<Customer, 'id'>, id?: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     let updated: Customer[];
 
     if (id) {
@@ -747,7 +754,8 @@ export default function App() {
   };
 
   const handleDeleteCustomer = (id: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const updated = customers.filter((c) => c.id !== id);
     setCustomers(updated);
     saveCustomers(currentMId, updated);
@@ -756,7 +764,8 @@ export default function App() {
   };
 
   const handleToggleMembership = (id: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const updated = customers.map((c) => {
       if (c.id === id) {
         const nextState = !c.isMember;
@@ -783,7 +792,8 @@ export default function App() {
   };
 
   const handleCancelOrder = (orderId: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = orders.map((o) => (o.id === orderId ? { ...o, status: 'batal' as const } : o));
@@ -794,7 +804,8 @@ export default function App() {
   };
 
   const handleDeleteOrderPermanently = (orderId: string) => {
-    const currentMId = merchant?.uid || '';
+    const currentMId = requireMerchantId();
+    if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = orders.filter((o) => o.id !== orderId);
@@ -814,9 +825,8 @@ export default function App() {
     return (
       <div className="w-full h-screen bg-slate-50 flex items-center justify-center p-3 sm:p-4">
         <MerchantLogin 
-          onLoginSuccess={(u) => {
-            setMerchant(u);
-            localStorage.setItem('yupos_merchant_session', JSON.stringify(u));
+          onLoginSuccess={() => {
+            // Identity is established exclusively by Firebase Auth observer above.
           }} 
         />
         <Toast toasts={toasts} onDismiss={dismissToast} />
@@ -1031,8 +1041,10 @@ export default function App() {
             }
             btStatusKasir={btStatusKasir}
             btStatusDapur={btStatusDapur}
-            onConnectPrinter={(type) => connectBluetoothPrinter(type)}
-            onDisconnectPrinter={(type) => disconnectBluetoothPrinter(type)}
+            onConnectPrinterKasir={() => connectBluetoothPrinter('kasir')}
+            onDisconnectPrinterKasir={() => disconnectBluetoothPrinter('kasir')}
+            onConnectPrinterDapur={() => connectBluetoothPrinter('dapur')}
+            onDisconnectPrinterDapur={() => disconnectBluetoothPrinter('dapur')}
           />
         )}
       </main>
