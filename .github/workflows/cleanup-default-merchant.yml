@@ -18,24 +18,30 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Remove fallback from App.tsx
+      - name: Remove all default merchant fallbacks
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('src/App.tsx')
-          text = path.read_text(encoding='utf-8')
-          old = "merchant?.uid || 'default_merchant'"
-          count = text.count(old)
-          if count == 0:
-              raise SystemExit('No default merchant fallback found in App.tsx')
-          text = text.replace(old, 'merchant?.uid')
-          path.write_text(text, encoding='utf-8')
-          print(f'Removed {count} default merchant fallback(s)')
+          root = Path('src')
+          replacements = 0
+          for path in root.rglob('*'):
+              if not path.is_file() or path.suffix not in {'.ts', '.tsx'}:
+                  continue
+              text = path.read_text(encoding='utf-8')
+              count = text.count("'default_merchant'") + text.count('"default_merchant"')
+              if count:
+                  text = text.replace("'default_merchant'", "''").replace('"default_merchant"', "''")
+                  path.write_text(text, encoding='utf-8')
+                  replacements += count
+                  print(f'{path}: removed {count}')
+          if replacements == 0:
+              raise SystemExit('No default_merchant literal found in src/')
+          print(f'Total removed: {replacements}')
           PY
 
       - name: Verify no fallback remains
         run: |
-          if grep -RIn --exclude-dir=.git --exclude='cleanup-default-merchant.yml' "default_merchant" src; then
+          if grep -RIn --exclude-dir=.git "default_merchant" src; then
             echo 'default_merchant still exists in src/'
             exit 1
           fi
@@ -44,6 +50,6 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src/App.tsx
+          git add src
           git commit -m 'Remove all default merchant fallbacks'
           git push
