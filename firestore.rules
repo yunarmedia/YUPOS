@@ -10,11 +10,12 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/merchants/$(merchantId));
     }
 
+    // YUPOS lifetime license: access is controlled only by the developer/admin
+    // through licenseStatus. There is no expiration date.
     function isLicensedMerchant(merchantId) {
       return isMerchant(merchantId)
         && merchantProfileExists(merchantId)
-        && get(/databases/$(database)/documents/merchants/$(merchantId)).data.licenseStatus == 'active'
-        && get(/databases/$(database)/documents/merchants/$(merchantId)).data.licenseExpiresAt > request.time;
+        && get(/databases/$(database)/documents/merchants/$(merchantId)).data.licenseStatus == 'active';
     }
 
     function merchantFieldMatches(merchantId) {
