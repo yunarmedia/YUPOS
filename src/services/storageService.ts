@@ -87,11 +87,24 @@ export function saveLocalData<T>(key: string, value: T): void {
   }
 }
 
+function isLegacyDemoSettings(settings: StoreSettings): boolean {
+  if (settings.storeName === 'YUPOS UNIVERSAL') return true;
+  if (settings.storePhone === '0812-3456-7890') return true;
+  if (settings.footer.includes('0812-3456-7890')) return true;
+  if (Object.values(settings.staffList || {}).some((names) =>
+    names.some((name) => ['Rian', 'Budi', 'Roni', 'Master Danu', 'Siti', 'Dewi'].includes(name)),
+  )) return true;
+  return false;
+}
+
 export function loadMerchantSettings(merchantId: string): StoreSettings {
   if (!isValidMerchantId(merchantId)) return { ...defaultSettings };
   const key = getMerchantStorageKey(merchantId, 'default', 'settings');
   const saved = loadLocalData<StoreSettings | null>(key, null);
-  if (!saved) return { ...defaultSettings };
+  if (!saved || isLegacyDemoSettings(saved)) {
+    if (saved && isLegacyDemoSettings(saved)) saveLocalData(key, defaultSettings);
+    return { ...defaultSettings };
+  }
 
   return {
     ...defaultSettings,
@@ -112,8 +125,14 @@ export function saveMerchantSettings(merchantId: string, settings: StoreSettings
   saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), settings);
 }
 
+function isLegacyDemoProduct(item: ProductItem): boolean {
+  return /^(barber|salon|fnb|ret|ld|ws|cst)-/i.test(String(item.id || '').trim());
+}
+
 /**
  * A merchant starts with an empty catalog. Never seed from BUSINESS_PRESETS.
+ * Known legacy demo catalog IDs are removed once from local storage so older
+ * test/demo sessions also become clean without touching unrelated merchant data.
  */
 export function loadMerchantProducts(merchantId: string, businessType: BusinessType): ProductItem[] {
   if (!isValidMerchantId(merchantId)) return [];
@@ -122,11 +141,10 @@ export function loadMerchantProducts(merchantId: string, businessType: BusinessT
   if (!raw) return [];
 
   try {
-    return (JSON.parse(raw) as ProductItem[]).map((item) => ({
-      ...item,
-      businessType,
-      merchantId,
-    }));
+    const parsed = JSON.parse(raw) as ProductItem[];
+    const cleaned = parsed.filter((item) => !isLegacyDemoProduct(item));
+    if (cleaned.length !== parsed.length) saveLocalData(key, cleaned);
+    return cleaned.map((item) => ({ ...item, businessType, merchantId }));
   } catch {
     return [];
   }
