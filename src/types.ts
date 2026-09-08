@@ -162,7 +162,8 @@ export interface MerchantUser {
   displayName: string | null;
 }
 
-export type MerchantLicenseStatus = 'active' | 'suspended' | 'expired' | 'pending';
+/** Lifetime license status. Access remains active until developer/admin suspends it. */
+export type MerchantLicenseStatus = 'active' | 'suspended' | 'pending';
 
 export interface MerchantProfile {
   uid: string;
@@ -172,7 +173,6 @@ export interface MerchantProfile {
   address?: string;
   phone?: string;
   licenseStatus: MerchantLicenseStatus;
-  licenseExpiresAt: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
