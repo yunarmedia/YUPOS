@@ -10,8 +10,6 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/merchants/$(merchantId));
     }
 
-    // Developer authorization is based on the authenticated Firebase UID and
-    // the server-controlled admins/{uid} profile. No email/localStorage trust.
     function isDeveloperAdmin() {
       return request.auth != null
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
@@ -19,8 +17,6 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
     }
 
-    // YUPOS lifetime license: access is controlled only by the developer/admin
-    // through licenseStatus. There is no expiration date.
     function isLicensedMerchant(merchantId) {
       return isMerchant(merchantId)
         && merchantProfileExists(merchantId)
@@ -31,18 +27,31 @@ service cloud.firestore {
       return !('merchantId' in request.resource.data) || request.resource.data.merchantId == merchantId;
     }
 
-    // Developer profile is server-controlled. The developer may read only its
-    // own authorization document; writes must go through trusted backend/admin tooling.
     match /admins/{adminId} {
-      allow read: if isDeveloperAdmin() && request.auth.uid == adminId;
+      // Avoid self-referential get() during the admin profile read.
+      allow read: if request.auth != null
+        && request.auth.uid == adminId
+        && resource.data.role == 'developer'
+        && resource.data.active == true;
       allow write: if false;
     }
 
-    // Merchant profiles are developer-controlled license records.
-    // Merchants may read only their own profile; developer admins may read all.
     match /merchants/{merchantId} {
       allow read: if isMerchant(merchantId) || isDeveloperAdmin();
-      allow write: if false;
+
+      // Spark-compatible Developer Admin management. The Authentication user
+      // must be created manually in Firebase Console first; this document only
+      // provisions/updates the merchant profile and license.
+      allow create: if isDeveloperAdmin()
+        && request.resource.data.uid == merchantId
+        && request.resource.data.licenseStatus in ['active', 'suspended', 'pending'];
+
+      allow update: if isDeveloperAdmin()
+        && request.resource.data.uid == merchantId
+        && resource.data.uid == merchantId
+        && request.resource.data.licenseStatus in ['active', 'suspended', 'pending'];
+
+      allow delete: if false;
     }
 
     match /yupos_config/{merchantId}/settings/{document} {
