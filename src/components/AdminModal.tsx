@@ -2,132 +2,45 @@ import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Lock, KeyRound, ShieldAlert, FileText, Trash2, Edit3, Plus, CreditCard, Users, BarChart3, Settings, Printer, Package, Wallet, Database } from 'lucide-react';
 import { StoreSettings, PortalPins } from '../types';
 
-interface AdminModalProps {
-  settings: StoreSettings;
-  onUpdatePins: (pins: PortalPins) => void;
-  onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
-}
-
+interface AdminModalProps { settings: StoreSettings; onUpdatePins: (pins: PortalPins) => void; onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void; }
 const METHODS_KEY_SUFFIX = '_custom_payment_methods';
-
-const getMerchantId = () => {
-  try {
-    const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null');
-    return String(session?.uid || '').trim();
-  } catch {
-    return '';
-  }
-};
-
-const loadCustomMethods = (settings: StoreSettings): string[] => {
-  const uid = getMerchantId();
-  try {
-    const stored = uid ? JSON.parse(localStorage.getItem(`yupos_${uid}${METHODS_KEY_SUFFIX}`) || 'null') : null;
-    if (Array.isArray(stored)) return Array.from(new Set(stored.map((v) => String(v).trim()).filter(Boolean))).slice(0, 30);
-  } catch {
-    // fall through to settings
-  }
-  return Array.from(new Set((settings.customPaymentMethods || []).map((v) => String(v).trim()).filter(Boolean))).slice(0, 30);
-};
+const getMerchantId = () => { try { const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null'); return String(session?.uid || '').trim(); } catch { return ''; } };
+const loadCustomMethods = (settings: StoreSettings): string[] => { const uid = getMerchantId(); try { const stored = uid ? JSON.parse(localStorage.getItem(`yupos_${uid}${METHODS_KEY_SUFFIX}`) || 'null') : null; if (Array.isArray(stored)) return Array.from(new Set(stored.map((v) => String(v).trim()).filter(Boolean))).slice(0, 30); } catch { /* fallback */ } return Array.from(new Set((settings.customPaymentMethods || []).map((v) => String(v).trim()).filter(Boolean))).slice(0, 30); };
 
 export const AdminModal: React.FC<AdminModalProps> = ({ settings, onUpdatePins, onShowToast }) => {
-  const [pins, setPins] = useState<PortalPins>({
-    admin: settings.portalPins?.admin || '2024UDC',
-    pos: settings.portalPins?.pos || '',
-    customers: settings.portalPins?.customers || '',
-    revenue: settings.portalPins?.revenue || '',
-    extract: settings.portalPins?.extract || '',
-    expenses: settings.portalPins?.expenses || '',
-    inventory: settings.portalPins?.inventory || '',
-    history: settings.portalPins?.history || '',
-    staff: settings.portalPins?.staff || '',
-    printer: settings.portalPins?.printer || '',
-    settings: settings.portalPins?.settings || '',
-    historyDeletePin: settings.portalPins?.historyDeletePin || '',
-    historyEditPin: settings.portalPins?.historyEditPin || '',
-    historyCancelPin: settings.portalPins?.historyCancelPin || '',
-    productEditPin: settings.portalPins?.productEditPin || '',
-    productDeletePin: settings.portalPins?.productDeletePin || '',
-    customerEditPin: settings.portalPins?.customerEditPin || '',
-    customerDeletePin: settings.portalPins?.customerDeletePin || '',
-    expenseEditPin: settings.portalPins?.expenseEditPin || '',
-    expenseDeletePin: settings.portalPins?.expenseDeletePin || '',
-    customPaymentPin: settings.portalPins?.customPaymentPin || '',
-  });
+  const [pins, setPins] = useState<PortalPins>({ admin: settings.portalPins?.admin || '2024UDC', pos: settings.portalPins?.pos || '', customers: settings.portalPins?.customers || '', revenue: settings.portalPins?.revenue || '', extract: settings.portalPins?.extract || '', expenses: settings.portalPins?.expenses || '', inventory: settings.portalPins?.inventory || '', history: settings.portalPins?.history || '', staff: settings.portalPins?.staff || '', printer: settings.portalPins?.printer || '', settings: settings.portalPins?.settings || '', historyDeletePin: settings.portalPins?.historyDeletePin || '', historyEditPin: settings.portalPins?.historyEditPin || '', historyCancelPin: settings.portalPins?.historyCancelPin || '', productEditPin: settings.portalPins?.productEditPin || '', productDeletePin: settings.portalPins?.productDeletePin || '', customerEditPin: settings.portalPins?.customerEditPin || '', customerDeletePin: settings.portalPins?.customerDeletePin || '', expenseEditPin: settings.portalPins?.expenseEditPin || '', expenseDeletePin: settings.portalPins?.expenseDeletePin || '', customPaymentPin: settings.portalPins?.customPaymentPin || '' });
   const [customMethods, setCustomMethods] = useState<string[]>(() => loadCustomMethods(settings));
   const [newMethod, setNewMethod] = useState('');
-
-  useEffect(() => {
-    setCustomMethods(loadCustomMethods(settings));
-  }, [settings]);
+  useEffect(() => { setCustomMethods(loadCustomMethods(settings)); }, [settings]);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedMethods = Array.from(new Set(customMethods.map((v) => v.trim().replace(/\s+/g, ' ')).filter(Boolean))).slice(0, 30);
     const uid = getMerchantId();
-    if (uid) {
-      const nextSettings = { ...settings, portalPins: pins, customPaymentMethods: normalizedMethods };
-      localStorage.setItem(`yupos_${uid}${METHODS_KEY_SUFFIX}`, JSON.stringify(normalizedMethods));
-      localStorage.setItem(`yupos_${uid}_settings`, JSON.stringify(nextSettings));
-      localStorage.setItem('yupos_settings', JSON.stringify(nextSettings));
-    }
+    const nextSettings = { ...settings, portalPins: pins, customPaymentMethods: normalizedMethods };
+    if (uid) { localStorage.setItem(`yupos_${uid}${METHODS_KEY_SUFFIX}`, JSON.stringify(normalizedMethods)); localStorage.setItem(`yupos_${uid}_settings`, JSON.stringify(nextSettings)); localStorage.setItem('yupos_settings', JSON.stringify(nextSettings)); }
     onUpdatePins(pins);
     onShowToast('Seluruh PIN otoritas dan metode pembayaran custom berhasil disimpan!', 'success');
+    window.setTimeout(() => window.location.reload(), 150);
   };
-
-  const handleAddMethod = () => {
-    const normalized = newMethod.trim().replace(/\s+/g, ' ').slice(0, 40);
-    if (!normalized) return;
-    if (customMethods.some((m) => m.toLowerCase() === normalized.toLowerCase())) {
-      onShowToast('Metode pembayaran tersebut sudah ada.', 'warning');
-      return;
-    }
-    if (customMethods.length >= 30) {
-      onShowToast('Maksimal 30 metode pembayaran custom.', 'warning');
-      return;
-    }
-    setCustomMethods((prev) => [...prev, normalized]);
-    setNewMethod('');
-  };
-
+  const handleAddMethod = () => { const normalized = newMethod.trim().replace(/\s+/g, ' ').slice(0, 40); if (!normalized) return; if (customMethods.some((m) => m.toLowerCase() === normalized.toLowerCase())) { onShowToast('Metode pembayaran tersebut sudah ada.', 'warning'); return; } if (customMethods.length >= 30) { onShowToast('Maksimal 30 metode pembayaran custom.', 'warning'); return; } setCustomMethods((prev) => [...prev, normalized]); setNewMethod(''); };
   const handleDeleteMethod = (method: string) => setCustomMethods((prev) => prev.filter((item) => item !== method));
-
   const pagePins: { key: keyof PortalPins; label: string; icon: React.ReactNode }[] = [
-    { key: 'pos', label: 'Transaksi / Kasir', icon: <Wallet className="w-3.5 h-3.5" /> },
-    { key: 'customers', label: 'Data Customer', icon: <Users className="w-3.5 h-3.5" /> },
-    { key: 'revenue', label: 'Omzet & Kas', icon: <BarChart3 className="w-3.5 h-3.5" /> },
-    { key: 'extract', label: 'Ekstrak Data', icon: <Database className="w-3.5 h-3.5" /> },
-    { key: 'expenses', label: 'Pengeluaran', icon: <Wallet className="w-3.5 h-3.5" /> },
-    { key: 'inventory', label: 'Produk & Jasa', icon: <Package className="w-3.5 h-3.5" /> },
-    { key: 'history', label: 'Riwayat', icon: <FileText className="w-3.5 h-3.5" /> },
-    { key: 'staff', label: 'Karyawan & Shift', icon: <Users className="w-3.5 h-3.5" /> },
-    { key: 'printer', label: 'Printer', icon: <Printer className="w-3.5 h-3.5" /> },
-    { key: 'settings', label: 'Pengaturan', icon: <Settings className="w-3.5 h-3.5" /> },
+    { key: 'pos', label: 'Transaksi / Kasir', icon: <Wallet className="w-3.5 h-3.5" /> }, { key: 'customers', label: 'Data Customer', icon: <Users className="w-3.5 h-3.5" /> }, { key: 'revenue', label: 'Omzet & Kas', icon: <BarChart3 className="w-3.5 h-3.5" /> }, { key: 'extract', label: 'Ekstrak Data', icon: <Database className="w-3.5 h-3.5" /> }, { key: 'expenses', label: 'Pengeluaran', icon: <Wallet className="w-3.5 h-3.5" /> }, { key: 'inventory', label: 'Produk & Jasa', icon: <Package className="w-3.5 h-3.5" /> }, { key: 'history', label: 'Riwayat', icon: <FileText className="w-3.5 h-3.5" /> }, { key: 'staff', label: 'Karyawan & Shift', icon: <Users className="w-3.5 h-3.5" /> }, { key: 'printer', label: 'Printer', icon: <Printer className="w-3.5 h-3.5" /> }, { key: 'settings', label: 'Pengaturan', icon: <Settings className="w-3.5 h-3.5" /> },
   ];
-
   const actionPins: { key: keyof PortalPins; label: string; icon: React.ReactNode }[] = [
-    { key: 'historyEditPin', label: 'Edit transaksi', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> },
-    { key: 'historyDeletePin', label: 'Hapus transaksi', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> },
-    { key: 'historyCancelPin', label: 'Batalkan transaksi', icon: <ShieldAlert className="w-3.5 h-3.5 text-red-600" /> },
-    { key: 'productEditPin', label: 'Edit produk / jasa', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> },
-    { key: 'productDeletePin', label: 'Hapus produk / jasa', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> },
-    { key: 'customerEditPin', label: 'Edit customer', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> },
-    { key: 'customerDeletePin', label: 'Hapus customer', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> },
-    { key: 'expenseEditPin', label: 'Edit pengeluaran', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> },
-    { key: 'expenseDeletePin', label: 'Hapus pengeluaran', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> },
+    { key: 'historyEditPin', label: 'Edit transaksi', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> }, { key: 'historyDeletePin', label: 'Hapus transaksi', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> }, { key: 'historyCancelPin', label: 'Batalkan transaksi', icon: <ShieldAlert className="w-3.5 h-3.5 text-red-600" /> }, { key: 'productEditPin', label: 'Edit produk / jasa', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> }, { key: 'productDeletePin', label: 'Hapus produk / jasa', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> }, { key: 'customerEditPin', label: 'Edit customer', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> }, { key: 'customerDeletePin', label: 'Hapus customer', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> }, { key: 'expenseEditPin', label: 'Edit pengeluaran', icon: <Edit3 className="w-3.5 h-3.5 text-amber-600" /> }, { key: 'expenseDeletePin', label: 'Hapus pengeluaran', icon: <Trash2 className="w-3.5 h-3.5 text-red-600" /> },
   ];
 
-  return (
-    <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 overflow-y-auto h-full">
-      <div className="flex items-center gap-3"><div className="p-3 bg-amber-500/10 text-amber-600 rounded-2xl border border-amber-500/20"><ShieldCheck className="w-8 h-8" /></div><div><h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Portal Otoritas Kontrol Admin</h2><p className="text-xs text-slate-500 font-semibold mt-0.5">Satu tempat untuk mengatur PIN seluruh halaman, tindakan sensitif, dan metode pembayaran custom.</p></div></div>
-      <form onSubmit={handleSave} className="space-y-5"><div className="bg-white rounded-3xl border border-amber-200/80 p-5 sm:p-6 shadow-sm space-y-5">
-        <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-950 font-bold leading-relaxed flex items-start gap-2"><ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" /><div><strong>Otoritas terpusat:</strong> PIN kosong berarti halaman/tindakan tersebut tidak dikunci. PIN tersimpan per akun merchant.</div></div>
-        <section className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3"><h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><KeyRound className="w-4 h-4 text-amber-600" /> PIN Akses Portal Admin</h4><input type="password" value={pins.admin || ''} onChange={(e) => setPins({ ...pins, admin: e.target.value })} placeholder="PIN Admin (default: 2024UDC)" className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" /></section>
-        <section className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3"><h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Lock className="w-4 h-4 text-slate-600" /> PIN Akses Seluruh Halaman</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{pagePins.map((item) => <div key={String(item.key)}><label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">{item.icon}{item.label}</label><input type="password" value={(pins[item.key] as string) || ''} onChange={(e) => setPins({ ...pins, [item.key]: e.target.value })} placeholder="Kosong = bebas akses" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" /></div>)}</div></section>
-        <section className="p-4 bg-red-50/60 rounded-2xl border border-red-100 space-y-3"><h4 className="text-xs font-black text-red-950 uppercase tracking-wider flex items-center gap-1.5"><FileText className="w-4 h-4 text-red-600" /> PIN Tindakan Sensitif</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{actionPins.map((item) => <div key={String(item.key)}><label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">{item.icon}{item.label}</label><input type="password" value={(pins[item.key] as string) || ''} onChange={(e) => setPins({ ...pins, [item.key]: e.target.value })} placeholder="Kosong = tanpa otorisasi" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-400" /></div>)}</div></section>
-        <section className="p-4 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-3"><h4 className="text-xs font-black text-blue-950 uppercase tracking-wider flex items-center gap-1.5"><CreditCard className="w-4 h-4 text-blue-600" /> Custom Pembayaran</h4><p className="text-[11px] text-slate-600 font-semibold">Konfigurasi hanya tersedia di portal admin. Setiap metode yang dibuat akan muncul di kasir dan ikut total omzet sesuai nama metodenya.</p><div className="flex gap-2"><input type="text" maxLength={40} value={newMethod} onChange={(e) => setNewMethod(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMethod(); } }} placeholder="Contoh: Ojek Online / Delivery / COD" className="flex-1 min-w-0 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" /><button type="button" onClick={handleAddMethod} className="px-3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Tambah</button></div><div className="space-y-2">{customMethods.length === 0 ? <div className="text-[11px] text-slate-400 font-semibold py-2">Belum ada metode pembayaran custom.</div> : customMethods.map((method) => <div key={method} className="flex items-center justify-between gap-2 p-2.5 bg-white border border-slate-200 rounded-xl"><span className="text-xs font-black text-slate-800">{method}</span><button type="button" onClick={() => handleDeleteMethod(method)} className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-black">Hapus</button></div>)}</div><div><label className="block text-[11px] font-bold text-slate-700 mb-1">PIN Kelola Custom Pembayaran</label><input type="password" value={pins.customPaymentPin || ''} onChange={(e) => setPins({ ...pins, customPaymentPin: e.target.value })} placeholder="Kosong = mengikuti akses Portal Admin" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></section>
-        <button type="submit" className="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-slate-950 font-black rounded-xl text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2"><KeyRound className="w-4 h-4" /> Simpan Seluruh Otoritas & Pembayaran</button>
-      </div></form>
-    </div>
-  );
+  return <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-6 overflow-y-auto h-full">
+    <div className="flex items-center gap-3"><div className="p-3 bg-amber-500/10 text-amber-600 rounded-2xl border border-amber-500/20"><ShieldCheck className="w-8 h-8" /></div><div><h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Portal Otoritas Kontrol Admin</h2><p className="text-xs text-slate-500 font-semibold mt-0.5">Satu tempat untuk mengatur PIN seluruh halaman, tindakan sensitif, dan metode pembayaran custom.</p></div></div>
+    <form onSubmit={handleSave} className="space-y-5"><div className="bg-white rounded-3xl border border-amber-200/80 p-5 sm:p-6 shadow-sm space-y-5">
+      <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-950 font-bold leading-relaxed flex items-start gap-2"><ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" /><div><strong>Otoritas terpusat:</strong> PIN kosong berarti halaman/tindakan tersebut tidak dikunci. PIN tersimpan per akun merchant.</div></div>
+      <section className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3"><h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><KeyRound className="w-4 h-4 text-amber-600" /> PIN Akses Portal Admin</h4><input type="password" value={pins.admin || ''} onChange={(e) => setPins({ ...pins, admin: e.target.value })} placeholder="PIN Admin (default: 2024UDC)" className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" /></section>
+      <section className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3"><h4 className="text-xs font-black text-slate-900 uppercase tracking-wider flex items-center gap-1.5"><Lock className="w-4 h-4 text-slate-600" /> PIN Akses Seluruh Halaman</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{pagePins.map((item) => <div key={String(item.key)}><label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">{item.icon}{item.label}</label><input type="password" value={(pins[item.key] as string) || ''} onChange={(e) => setPins({ ...pins, [item.key]: e.target.value })} placeholder="Kosong = bebas akses" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" /></div>)}</div></section>
+      <section className="p-4 bg-red-50/60 rounded-2xl border border-red-100 space-y-3"><h4 className="text-xs font-black text-red-950 uppercase tracking-wider flex items-center gap-1.5"><FileText className="w-4 h-4 text-red-600" /> PIN Tindakan Sensitif</h4><div className="grid grid-cols-1 sm:grid-cols-2 gap-3">{actionPins.map((item) => <div key={String(item.key)}><label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center gap-1.5">{item.icon}{item.label}</label><input type="password" value={(pins[item.key] as string) || ''} onChange={(e) => setPins({ ...pins, [item.key]: e.target.value })} placeholder="Kosong = tanpa otorisasi" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-400" /></div>)}</div></section>
+      <section className="p-4 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-3"><h4 className="text-xs font-black text-blue-950 uppercase tracking-wider flex items-center gap-1.5"><CreditCard className="w-4 h-4 text-blue-600" /> Custom Pembayaran</h4><p className="text-[11px] text-slate-600 font-semibold">Konfigurasi hanya tersedia di portal admin. Setiap metode yang dibuat akan muncul di kasir dan ikut total omzet sesuai nama metodenya.</p><div className="flex gap-2"><input type="text" maxLength={40} value={newMethod} onChange={(e) => setNewMethod(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddMethod(); } }} placeholder="Contoh: Ojek Online / Delivery / COD" className="flex-1 min-w-0 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" /><button type="button" onClick={handleAddMethod} className="px-3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5"><Plus className="w-3.5 h-3.5" /> Tambah</button></div><div className="space-y-2">{customMethods.length === 0 ? <div className="text-[11px] text-slate-400 font-semibold py-2">Belum ada metode pembayaran custom.</div> : customMethods.map((method) => <div key={method} className="flex items-center justify-between gap-2 p-2.5 bg-white border border-slate-200 rounded-xl"><span className="text-xs font-black text-slate-800">{method}</span><button type="button" onClick={() => handleDeleteMethod(method)} className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-[10px] font-black">Hapus</button></div>)}</div><div><label className="block text-[11px] font-bold text-slate-700 mb-1">PIN Kelola Custom Pembayaran</label><input type="password" value={pins.customPaymentPin || ''} onChange={(e) => setPins({ ...pins, customPaymentPin: e.target.value })} placeholder="Kosong = mengikuti akses Portal Admin" className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" /></div></section>
+      <button type="submit" className="w-full py-3.5 px-4 bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-slate-950 font-black rounded-xl text-xs sm:text-sm shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2"><KeyRound className="w-4 h-4" /> Simpan Seluruh Otoritas & Pembayaran</button>
+    </div></form>
+  </div>;
 };
