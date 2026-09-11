@@ -8,7 +8,7 @@ import { AdminModal } from './AdminModal';
 
 interface SidebarProps { activeTab: string; onSelectTab: (tabId: string) => void; settings: StoreSettings; merchant: MerchantUser | null; onLogout: () => void; isOpen?: boolean; onClose?: () => void; }
 
-const PROTECTED_TABS: Record<string, keyof PortalPins> = { customers: 'customers', revenue: 'revenue', extract: 'extract', history: 'history', printer: 'printer' };
+const PROTECTED_TABS: Record<string, keyof PortalPins> = { pos: 'pos', customers: 'customers', revenue: 'revenue', extract: 'extract', history: 'history', printer: 'printer' };
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settings, merchant, onLogout, isOpen = false, onClose }) => {
   const activeShiftName = settings.activeShift === '1' ? settings.shift1Name : settings.shift2Name;
@@ -31,7 +31,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
     }
   };
 
-  // Premium cashier navigation: text labels stay compact while icons communicate the function clearly.
   const navItems = [
     { id: 'pos', label: 'TRANSAKSI', icon: ReceiptText },
     { id: 'history', label: 'RIWAYAT', icon: History },
@@ -50,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
   };
 
   const handleItemClick = (id: string) => {
-    if (id === 'admin') { openPin('Otoritas Admin Kontrol', settings.portalPins?.admin || '2024UDC', () => setShowAdmin(true)); return; }
+    if (id === 'admin') { openPin('Otoritas Admin Kontrol', settings.portalPins?.admin || '', () => setShowAdmin(true)); return; }
     const pinKey = PROTECTED_TABS[id];
     const expected = pinKey ? settings.portalPins?.[pinKey] || '' : '';
     if (pinKey && expected) { openPin(`Akses ${navItems.find((item) => item.id === id)?.label || id}`, expected, () => onSelectTab(id)); return; }

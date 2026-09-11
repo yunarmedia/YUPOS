@@ -7,6 +7,27 @@ import './customPaymentEnhancer';
 import './index.css';
 import './premium-ui.css';
 
+function migrateLegacyAuthorityCredential(): void {
+  try {
+    const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null');
+    const uid = String(session?.uid || '').trim();
+    if (!uid) return;
+    const key = `yupos_${uid}_settings`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    if (settings?.portalPins?.admin === '2024UDC') {
+      settings.portalPins.admin = '';
+      localStorage.setItem(key, JSON.stringify(settings));
+      localStorage.setItem('yupos_settings', JSON.stringify(settings));
+    }
+  } catch {
+    // Ignore malformed legacy settings; the authenticated merchant flow will recover defaults.
+  }
+}
+
+migrateLegacyAuthorityCredential();
+
 function readPortalPins(): Record<string, string> {
   try {
     const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null');
@@ -94,7 +115,7 @@ function installYuposConfirmBridge() {
     const isDeleteAction = Boolean(button.querySelector('svg.lucide-trash-2')); if (!isDeleteAction) return;
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     const row = button.closest('tr'); const name = row?.querySelector('td:first-child span.font-bold')?.textContent?.trim();
-    open(name ? `Hapus "${name}" dari katalog produk?` : 'Hapus item ini dari katalog produk?', button);
+    open(name ? `Hapus \"${name}\" dari katalog produk?` : 'Hapus item ini dari katalog produk?', button);
   }, true);
   const nativeConfirm = window.confirm.bind(window);
   window.confirm = (message?: string) => bypassNextConfirm ? true : nativeConfirm(message);
