@@ -125,18 +125,31 @@ function installYuposConfirmBridge() {
 }
 installYuposConfirmBridge();
 
-// Restore the authenticated merchant's cloud state before the app needs it on a new device.
-// If the current browser already has a cache, hydration still refreshes it from the account cloud copy.
-onAuthStateChanged(auth, (user) => {
-  if (!user?.uid) return;
-  void hydrateMerchantDataFromFirebase(user.uid).then((hydrated) => {
-    if (hydrated) window.dispatchEvent(new CustomEvent('yupos-cloud-hydrated', { detail: { uid: user.uid } }));
-  });
-});
+async function bootstrapYupos() {
+  const rootElement = document.getElementById('root');
+  if (!rootElement) throw new Error('YUPOS root element (#root) was not found.');
 
-const rootElement = document.getElementById('root');
-if (!rootElement) throw new Error('YUPOS root element (#root) was not found.');
-createRoot(rootElement).render(<StrictMode><AuthBootstrap><UpdateNotice /><App /></AuthBootstrap></StrictMode>);
+  let unsubscribe: (() => void) | null = null;
+  try {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (settled) return;
+        settled = true;
+        if (user?.uid) await hydrateMerchantDataFromFirebase(user.uid);
+        resolve();
+      });
+    });
+  } catch (error) {
+    console.warn('YUPOS cloud bootstrap warning:', error);
+  } finally {
+    unsubscribe?.();
+  }
+
+  createRoot(rootElement).render(<StrictMode><AuthBootstrap><UpdateNotice /><App /></AuthBootstrap></StrictMode>);
+}
+
+void bootstrapYupos();
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
