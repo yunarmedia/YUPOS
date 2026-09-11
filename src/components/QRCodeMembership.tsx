@@ -7,7 +7,7 @@ interface QRCodeMembershipProps {
   className?: string;
 }
 
-export const QRCodeMembership: React.FC<QRCodeMembershipProps> = ({ value, size = 220, className = '' }) => {
+export const QRCodeMembership: React.FC<QRCodeMembershipProps> = ({ value, size = 320, className = '' }) => {
   const [svg, setSvg] = useState('');
 
   useEffect(() => {
@@ -16,7 +16,8 @@ export const QRCodeMembership: React.FC<QRCodeMembershipProps> = ({ value, size 
     QRCode.toString(value, {
       type: 'svg',
       width: size,
-      margin: 4,
+      // Quiet zone tetap cukup untuk scanner, tetapi tidak membuang terlalu banyak area.
+      margin: 2,
       errorCorrectionLevel: 'M',
       color: { dark: '#000000', light: '#ffffff' },
     }).then((result) => {
