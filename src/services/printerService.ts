@@ -1,5 +1,6 @@
 import { Order, StoreSettings } from '../types';
 import QRCode from 'qrcode';
+import { auth } from '../config/firebase';
 
 export const BLE_PRINTER_PROFILES = [
   { name: 'Generic ESC/POS', service: '000018f0-0000-1000-8000-00805f9b34fb', characteristics: ['00002af1-0000-1000-8000-00805f9b34fb'] },
@@ -10,130 +11,28 @@ export const BLE_PRINTER_PROFILES = [
 const OPTIONAL_SERVICES = BLE_PRINTER_PROFILES.map((p) => p.service);
 type BluetoothWithGetDevices = Bluetooth & { getDevices?: () => Promise<BluetoothDevice[]> };
 function isWritable(c: BluetoothRemoteGATTCharacteristic): boolean { return Boolean(c.properties.write || c.properties.writeWithoutResponse); }
-async function findWritableCharacteristic(server: BluetoothRemoteGATTServer): Promise<BluetoothRemoteGATTCharacteristic | null> {
-  for (const profile of BLE_PRINTER_PROFILES) { try { const service = await server.getPrimaryService(profile.service); for (const uuid of profile.characteristics) { try { const c = await service.getCharacteristic(uuid); if (isWritable(c)) return c; } catch {} } try { const c = (await service.getCharacteristics()).find(isWritable); if (c) return c; } catch {} } catch {} }
-  try { for (const service of await server.getPrimaryServices()) { try { const c = (await service.getCharacteristics()).find(isWritable); if (c) return c; } catch {} } } catch {}
-  return null;
-}
-async function connectDevice(device: BluetoothDevice): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
-  if (!device.gatt) throw new Error('Printer tidak menyediakan koneksi GATT/BLE.'); const server = device.gatt.connected ? device.gatt : await device.gatt.connect(); const characteristic = await findWritableCharacteristic(server);
-  if (!characteristic) { try { device.gatt.disconnect(); } catch {} throw new Error('Channel BLE ESC/POS printer tidak ditemukan.'); } return { device, characteristic };
-}
-
-/**
- * IMPORTANT: call the native Web Bluetooth chooser directly from the original
- * user click. A custom async modal before requestDevice() can break Chrome's
- * user-activation chain and result in no native chooser appearing.
- */
-export async function requestBluetoothPrinter(deviceType: 'kasir' | 'dapur' = 'kasir'): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
-  void deviceType;
-  if (!window.isSecureContext) throw new Error('Bluetooth membutuhkan HTTPS / secure context.');
-  if (!('bluetooth' in navigator)) throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge dengan Bluetooth BLE.');
-  const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined;
-  if (!bluetooth?.requestDevice) throw new Error('Bluetooth API tidak tersedia di browser ini.');
-
-  // Keep this call directly inside the React button's async handler.
-  const device = await bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: OPTIONAL_SERVICES,
-  });
-  return connectDevice(device);
-}
-
+async function findWritableCharacteristic(server: BluetoothRemoteGATTServer): Promise<BluetoothRemoteGATTCharacteristic | null> { for (const profile of BLE_PRINTER_PROFILES) { try { const service = await server.getPrimaryService(profile.service); for (const uuid of profile.characteristics) { try { const c = await service.getCharacteristic(uuid); if (isWritable(c)) return c; } catch {} } try { const c = (await service.getCharacteristics()).find(isWritable); if (c) return c; } catch {} } catch {} } try { for (const service of await server.getPrimaryServices()) { try { const c = (await service.getCharacteristics()).find(isWritable); if (c) return c; } catch {} } } catch {} return null; }
+async function connectDevice(device: BluetoothDevice): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> { if (!device.gatt) throw new Error('Printer tidak menyediakan koneksi GATT/BLE.'); const server = device.gatt.connected ? device.gatt : await device.gatt.connect(); const characteristic = await findWritableCharacteristic(server); if (!characteristic) { try { device.gatt.disconnect(); } catch {} throw new Error('Channel BLE ESC/POS printer tidak ditemukan.'); } return { device, characteristic }; }
+export async function requestBluetoothPrinter(deviceType: 'kasir' | 'dapur' = 'kasir'): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> { void deviceType; if (!window.isSecureContext) throw new Error('Bluetooth membutuhkan HTTPS / secure context.'); if (!('bluetooth' in navigator)) throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge dengan Bluetooth BLE.'); const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined; if (!bluetooth?.requestDevice) throw new Error('Bluetooth API tidak tersedia di browser ini.'); const device = await bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES }); return connectDevice(device); }
 export async function reconnectBluetoothPrinter(device: BluetoothDevice): Promise<BluetoothRemoteGATTCharacteristic> { return (await connectDevice(device)).characteristic; }
 export async function getPreviouslyAuthorizedPrinters(): Promise<BluetoothDevice[]> { const b = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined; if (!b?.getDevices) return []; try { return await b.getDevices(); } catch { return []; } }
-export async function sendBluetoothData(characteristic: BluetoothRemoteGATTCharacteristic, data: Uint8Array | PromiseLike<Uint8Array>): Promise<void> {
-  if (!characteristic) throw new Error('Characteristic printer tidak tersedia.'); const payload = await data; if (!characteristic.service.device.gatt?.connected) throw new Error('Printer Bluetooth tidak sedang terhubung.'); const maxChunkSize = 180;
-  for (let offset = 0; offset < payload.length; offset += maxChunkSize) { const chunk = payload.slice(offset, Math.min(offset + maxChunkSize, payload.length)); if (characteristic.properties.write && typeof characteristic.writeValue === 'function') await characteristic.writeValue(chunk); else if (characteristic.properties.writeWithoutResponse && typeof characteristic.writeValueWithoutResponse === 'function') await characteristic.writeValueWithoutResponse(chunk); else throw new Error('Channel printer tidak memiliki izin write.'); await new Promise((resolve) => setTimeout(resolve, 35)); }
-}
+export async function sendBluetoothData(characteristic: BluetoothRemoteGATTCharacteristic, data: Uint8Array | PromiseLike<Uint8Array>): Promise<void> { if (!characteristic) throw new Error('Characteristic printer tidak tersedia.'); const payload = await data; if (!characteristic.service.device.gatt?.connected) throw new Error('Printer Bluetooth tidak sedang terhubung.'); const maxChunkSize = 180; for (let offset = 0; offset < payload.length; offset += maxChunkSize) { const chunk = payload.slice(offset, Math.min(offset + maxChunkSize, payload.length)); if (characteristic.properties.write && typeof characteristic.writeValue === 'function') await characteristic.writeValue(chunk); else if (characteristic.properties.writeWithoutResponse && typeof characteristic.writeValueWithoutResponse === 'function') await characteristic.writeValueWithoutResponse(chunk); else throw new Error('Channel printer tidak memiliki izin write.'); await new Promise((resolve) => setTimeout(resolve, 35)); } }
 function line(width: number): string { return '-'.repeat(width); }
-function columns(left: string, right: string, width: number): string {
-  const normalizedLeft = left.trim();
-  const normalizedRight = right.trim();
-  const gap = 1;
-  if (normalizedRight.length >= width) return normalizedLeft + '\n' + wrapText(normalizedRight, width).join('\n');
-  const availableLeft = Math.max(1, width - normalizedRight.length - gap);
-  const leftLines = wrapText(normalizedLeft, availableLeft);
-  const first = leftLines.shift() || '';
-  const firstLine = first + ' '.repeat(Math.max(1, width - first.length - normalizedRight.length)) + normalizedRight;
-  return [firstLine, ...leftLines].join('\n');
-}
-function wrapText(value: string, width: number): string[] {
-  const safeWidth = Math.max(1, width);
-  if (!value) return [''];
-  const result: string[] = [];
-  for (const rawLine of value.replace(/\r\n?/g, '\n').split('\n')) {
-    let remaining = rawLine.trim();
-    if (!remaining) { result.push(''); continue; }
-    while (remaining.length > safeWidth) {
-      let cut = remaining.lastIndexOf(' ', safeWidth);
-      if (cut <= 0) cut = safeWidth;
-      result.push(remaining.slice(0, cut).trimEnd());
-      remaining = remaining.slice(cut).trimStart();
-    }
-    result.push(remaining);
-  }
-  return result;
-}
-function centeredWrapped(command:(...values:number[])=>void,text:(value:string)=>void,value:string,width:number):void {
-  command(0x1b,0x61,0x01);
-  for (const lineText of wrapText(value,width)) text(lineText+'\n');
-  command(0x1b,0x61,0x00);
-}
-function prefixedWrap(prefix: string, value: string, width: number): string[] {
-  const cleanValue = value.trim();
-  if (!cleanValue) return [prefix.trimEnd()];
-  const firstWidth = Math.max(1, width - prefix.length);
-  const firstLines = wrapText(cleanValue, firstWidth);
-  const lines = [`${prefix}${firstLines.shift() || ''}`];
-  const continuationIndent = ' '.repeat(prefix.length);
-  const continuationLines = firstLines.flatMap((line) => wrapText(line, Math.max(1, width - continuationIndent.length)));
-  return lines.concat(continuationLines.map((line) => `${continuationIndent}${line}`));
-}
-function printerSafeText(value: unknown): string {
-  return String(value ?? '')
-    .replace(/•/g, '|')
-    .replace(/[–—]/g, '-')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/…/g, '...')
-    .replace(/·/g, '.')
-    // Preserve explicit line breaks so footer text keeps the exact Enter spacing.
-    .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ')
-    .replace(/[^\x0A\x20-\x7E]/g, ' ')
-    .trim();
-}
+function columns(left: string, right: string, width: number): string { const normalizedLeft = left.trim(); const normalizedRight = right.trim(); const gap = 1; if (normalizedRight.length >= width) return normalizedLeft + '\n' + wrapText(normalizedRight, width).join('\n'); const availableLeft = Math.max(1, width - normalizedRight.length - gap); const leftLines = wrapText(normalizedLeft, availableLeft); const first = leftLines.shift() || ''; const firstLine = first + ' '.repeat(Math.max(1, width - first.length - normalizedRight.length)) + normalizedRight; return [firstLine, ...leftLines].join('\n'); }
+function wrapText(value: string, width: number): string[] { const safeWidth = Math.max(1, width); if (!value) return ['']; const result: string[] = []; for (const rawLine of value.replace(/\r\n?/g, '\n').split('\n')) { let remaining = rawLine.trim(); if (!remaining) { result.push(''); continue; } while (remaining.length > safeWidth) { let cut = remaining.lastIndexOf(' ', safeWidth); if (cut <= 0) cut = safeWidth; result.push(remaining.slice(0, cut).trimEnd()); remaining = remaining.slice(cut).trimStart(); } result.push(remaining); } return result; }
+function centeredWrapped(command:(...values:number[])=>void,text:(value:string)=>void,value:string,width:number):void { command(0x1b,0x61,0x01); for (const lineText of wrapText(value,width)) text(lineText+'\n'); command(0x1b,0x61,0x00); }
+function prefixedWrap(prefix: string, value: string, width: number): string[] { const cleanValue = value.trim(); if (!cleanValue) return [prefix.trimEnd()]; const firstWidth = Math.max(1, width - prefix.length); const firstLines = wrapText(cleanValue, firstWidth); const lines = [`${prefix}${firstLines.shift() || ''}`]; const continuationIndent = ' '.repeat(prefix.length); const continuationLines = firstLines.flatMap((line) => wrapText(line, Math.max(1, width - continuationIndent.length))); return lines.concat(continuationLines.map((line) => `${continuationIndent}${line}`)); }
+function printerSafeText(value: unknown): string { return String(value ?? '').replace(/•/g, '|').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/…/g, '...').replace(/·/g, '.').replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, ' ').replace(/[^\x0A\x20-\x7E]/g, ' ').trim(); }
 function loadImage(src: string): Promise<HTMLImageElement> { return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = () => reject(new Error('Gagal memuat gambar printer.')); image.src = src; }); }
-function canvasToRaster(canvas: HTMLCanvasElement): Uint8Array {
-  const width = Math.max(8, Math.floor(canvas.width / 8) * 8); const height = canvas.height; const ctx = canvas.getContext('2d', { willReadFrequently: true }); if (!ctx) throw new Error('Canvas printer tidak tersedia.'); const pixels = ctx.getImageData(0, 0, width, height).data; const bytesPerRow = width / 8; const raster = new Uint8Array(bytesPerRow * height);
-  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) { const i = (y * width + x) * 4; const lum = pixels[i] * .299 + pixels[i + 1] * .587 + pixels[i + 2] * .114; if (lum < 170) raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7); }
-  const command = new Uint8Array(8 + raster.length); command.set([0x1d,0x76,0x30,0x00,bytesPerRow & 255,(bytesPerRow >> 8) & 255,height & 255,(height >> 8) & 255]); command.set(raster,8); return command;
-}
+function canvasToRaster(canvas: HTMLCanvasElement): Uint8Array { const width = Math.max(8, Math.floor(canvas.width / 8) * 8); const height = canvas.height; const ctx = canvas.getContext('2d', { willReadFrequently: true }); if (!ctx) throw new Error('Canvas printer tidak tersedia.'); const pixels = ctx.getImageData(0, 0, width, height).data; const bytesPerRow = width / 8; const raster = new Uint8Array(bytesPerRow * height); for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) { const i = (y * width + x) * 4; const lum = pixels[i] * .299 + pixels[i + 1] * .587 + pixels[i + 2] * .114; if (lum < 170) raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7); } const command = new Uint8Array(8 + raster.length); command.set([0x1d,0x76,0x30,0x00,bytesPerRow & 255,(bytesPerRow >> 8) & 255,height & 255,(height >> 8) & 255]); command.set(raster,8); return command; }
 async function makeLogoRaster(src: string, maxWidth: number): Promise<Uint8Array> { const image = await loadImage(src); const scale = Math.min(maxWidth / image.width, 1); const width = Math.max(8, Math.floor(image.width * scale / 8) * 8); const height = Math.max(1, Math.round(image.height * (width / image.width))); const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height; const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Canvas logo printer tidak tersedia.'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,width,height); ctx.imageSmoothingEnabled=true; ctx.drawImage(image,0,0,width,height); return canvasToRaster(canvas); }
 async function makeQrRaster(value: string, targetWidth: number): Promise<Uint8Array> { const qr = QRCode.create(value, { errorCorrectionLevel: 'M' }); const moduleCount = qr.modules.size; const quietModules = 4; const cellSize = Math.max(4, Math.floor(targetWidth / (moduleCount + quietModules * 2))); const qrSize = (moduleCount + quietModules * 2) * cellSize; const canvasSize = Math.ceil(qrSize / 8) * 8; const offset = Math.floor((canvasSize - qrSize) / 2); const canvas = document.createElement('canvas'); canvas.width = canvasSize; canvas.height = canvasSize; const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Canvas QR printer tidak tersedia.'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvasSize,canvasSize); ctx.fillStyle='#000'; const modules = qr.modules.data as unknown as ArrayLike<number>; for (let row = 0; row < moduleCount; row++) for (let col = 0; col < moduleCount; col++) if (modules[row * moduleCount + col]) ctx.fillRect(offset + (col + quietModules) * cellSize, offset + (row + quietModules) * cellSize, cellSize, cellSize); return canvasToRaster(canvas); }
 function center(command:(...values:number[])=>void,text:(value:string)=>void,value:string):void{command(0x1b,0x61,0x01);text(value+'\n');command(0x1b,0x61,0x00);}
 function bold(command:(...values:number[])=>void,text:(value:string)=>void,value:string):void{command(0x1b,0x45,0x01);text(value+'\n');command(0x1b,0x45,0x00);}
-export async function buildReceiptEscPos(order: Order, settings: StoreSettings): Promise<Uint8Array> {
-  const is80=settings.printerPaperWidth==='80mm'; const paperChars=is80?48:32; const pixelWidth=is80?576:384; const qrWidth=is80?384:320; const encoder=new TextEncoder(); const safe=(v:unknown)=>printerSafeText(v); const preserveLayout=(v:unknown)=>wrapText(printerSafeText(v),paperChars).join('\n'); const bytes:number[]=[0x1b,0x40,0x1b,0x33,0x26]; const text=(v:string)=>bytes.push(...encoder.encode(v)); const command=(...v:number[])=>bytes.push(...v); const append=(d:Uint8Array)=>bytes.push(...d); const spacer=()=>text('\n');
-  const moneyFixed=(v:number)=>`Rp${new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Math.round(v||0))}`;
+export async function buildReceiptEscPos(order: Order, settings: StoreSettings): Promise<Uint8Array> { const is80=settings.printerPaperWidth==='80mm'; const paperChars=is80?48:32; const pixelWidth=is80?576:384; const qrWidth=is80?384:320; const encoder=new TextEncoder(); const safe=(v:unknown)=>printerSafeText(v); const bytes:number[]=[0x1b,0x40,0x1b,0x33,0x26]; const text=(v:string)=>bytes.push(...encoder.encode(v)); const command=(...v:number[])=>bytes.push(...v); const append=(d:Uint8Array)=>bytes.push(...d); const spacer=()=>text('\n'); const moneyFixed=(v:number)=>`Rp${new Intl.NumberFormat('id-ID',{maximumFractionDigits:0}).format(Math.round(v||0))};`;
   if(settings.logoBase64){try{command(0x1b,0x61,0x01);append(await makeLogoRaster(settings.logoBase64,Math.round(pixelWidth*.68)));spacer();command(0x1b,0x61,0x00);}catch(e){console.warn('YUPOS printer logo skipped:',e);}}
-  command(0x1b,0x61,0x01);bold(command,text,safe(settings.storeName||'YUPOS'));command(0x1b,0x61,0x00);
-  if(settings.storeAddress) centeredWrapped(command,text,safe(settings.storeAddress),paperChars);
-  if(settings.storePhone) centeredWrapped(command,text,`Telp: ${safe(settings.storePhone)}`,paperChars);
-  text(line(paperChars)+'\n');
-  for(const lineText of prefixedWrap('No : ',safe(order.id),paperChars)) text(lineText+'\n');
-  for(const lineText of prefixedWrap('Tgl: ',`${safe(order.date)} ${safe(order.time)}`,paperChars)) text(lineText+'\n');
-  for(const lineText of prefixedWrap('Kasir: ',`${safe(order.cashierName||(order.shift==='1'?settings.shift1Name:settings.shift2Name)||'Kasir')} (S${safe(order.shift)})`,paperChars)) text(lineText+'\n');
-  if(order.customer&&order.customer!=='Pelanggan') for(const lineText of prefixedWrap('Pelanggan: ',safe(order.customer),paperChars)) text(lineText+'\n');
-  text(line(paperChars)+'\n');
-  for(const item of order.items){
-    for(const lineText of wrapText(safe(item.name),paperChars)) bold(command,text,lineText);
-    if(settings.businessType==='barbershop'&&item.assignedTo){command(0x1b,0x61,0x00);for(const lineText of prefixedWrap('  Petugas: ',safe(item.assignedTo),paperChars)) text(lineText+'\n');}
-    text(columns(`${item.qty} x ${moneyFixed(item.price)}`,moneyFixed(item.qty*item.price),paperChars)+'\n');
-    if(item.note) text(prefixedWrap('  Catatan: ',safe(item.note),paperChars).join('\n')+'\n');
-    spacer();
-  }
+  command(0x1b,0x61,0x01);bold(command,text,safe(settings.storeName||'YUPOS'));command(0x1b,0x61,0x00); if(settings.storeAddress)centeredWrapped(command,text,safe(settings.storeAddress),paperChars); if(settings.storePhone)centeredWrapped(command,text,`Telp: ${safe(settings.storePhone)}`,paperChars); text(line(paperChars)+'\n'); for(const l of prefixedWrap('No : ',safe(order.id),paperChars))text(l+'\n'); for(const l of prefixedWrap('Tgl: ',`${safe(order.date)} ${safe(order.time)}`,paperChars))text(l+'\n'); for(const l of prefixedWrap('Kasir: ',`${safe(order.cashierName||(order.shift==='1'?settings.shift1Name:settings.shift2Name)||'Kasir')} (S${safe(order.shift)})`,paperChars))text(l+'\n'); if(order.customer&&order.customer!=='Pelanggan')for(const l of prefixedWrap('Pelanggan: ',safe(order.customer),paperChars))text(l+'\n'); text(line(paperChars)+'\n');
+  for(const item of order.items){for(const l of wrapText(safe(item.name),paperChars))bold(command,text,l);if(settings.businessType==='barbershop'&&item.assignedTo){for(const l of prefixedWrap('  Petugas: ',safe(item.assignedTo),paperChars))text(l+'\n');}text(columns(`${item.qty} x ${moneyFixed(item.price)}`,moneyFixed(item.qty*item.price),paperChars)+'\n');if(item.note)text(prefixedWrap('  Catatan: ',safe(item.note),paperChars).join('\n')+'\n');spacer();}
   text(line(paperChars)+'\n');text(columns('Subtotal',moneyFixed(order.subtotal),paperChars)+'\n');if(order.discount>0)text(columns('Diskon',`-${moneyFixed(order.discount)}`,paperChars)+'\n');if((order.ppn??0)>0)text(columns(`PPN ${order.ppnRate??11}%`,moneyFixed(order.ppn??0),paperChars)+'\n');bold(command,text,columns('TOTAL',moneyFixed(order.total),paperChars));text('\n');text(columns('Pembayaran',safe(order.payment).toUpperCase(),paperChars)+'\n');
-  if(settings.businessType==='barbershop'&&order.customerIsMember&&order.customerCode){try{const{loadCustomers}=await import('./customerService');const{buildMembershipScanUrl,getMembershipReward}=await import('./membershipService');const customer=loadCustomers(order.merchantId||'').find((c)=>c.customerCode===order.customerCode);if(customer){text(line(paperChars)+'\n');center(command,text,'MEMBERSHIP CUSTOMER');center(command,text,'Scan QR untuk cek kunjungan');center(command,text,'& reward membership');command(0x1b,0x61,0x01);append(await makeQrRaster(buildMembershipScanUrl(customer),qrWidth));text('\n');command(0x1b,0x61,0x00);for(const lineText of wrapText(`${safe(customer.customerCode)} | ${customer.visitCount||0}/10 KUNJUNGAN`,paperChars)) bold(command,text,lineText);const reward=getMembershipReward(customer);if(reward==='freeHaircut')center(command,text,'REWARD: CUKUR GRATIS');else if(reward==='discount50')center(command,text,'REWARD: DISKON 50%');spacer();}}catch(e){console.warn('YUPOS membership QR skipped:',e);}}
-  text(line(paperChars)+'\n');command(0x1b,0x61,0x01);if(settings.footer){centeredWrapped(command,text,safe(settings.footer),paperChars);}else{center(command,text,'Terima kasih atas kunjungan Anda!');}command(0x1b,0x61,0x00);text('\n\n\n');command(0x1b,0x45,0x01);centeredWrapped(command,text,'POWERED BY YUPOS',paperChars);command(0x1b,0x45,0x00);text('\n\n');command(0x1b,0x32);command(0x1d,0x56,0x00);return new Uint8Array(bytes);
-}
+  if(order.customerIsMember&&order.customerCode){try{const{loadCustomers}=await import('./customerService');const{buildMembershipScanUrl,getMembershipReward}=await import('./membershipService');const uid=order.merchantId||auth.currentUser?.uid||JSON.parse(localStorage.getItem('yupos_merchant_session')||'{}')?.uid||'';const customer=loadCustomers(uid).find(c=>String(c.customerCode).trim().toUpperCase()===String(order.customerCode).trim().toUpperCase()&&c.isMember);if(customer){text(line(paperChars)+'\n');center(command,text,'MEMBERSHIP CUSTOMER');center(command,text,'Scan QR untuk membuka Member Card');command(0x1b,0x61,0x01);append(await makeQrRaster(buildMembershipScanUrl(customer),qrWidth));text('\n');command(0x1b,0x61,0x00);bold(command,text,`${safe(customer.customerCode)} | ${customer.visitCount||0}/10 KUNJUNGAN`);const reward=getMembershipReward(customer);if(reward==='freeHaircut')center(command,text,'REWARD: CUKUR GRATIS');else if(reward==='discount50')center(command,text,'REWARD: DISKON 50%');spacer();}}catch(e){console.warn('YUPOS membership QR skipped:',e);}}
+  text(line(paperChars)+'\n');command(0x1b,0x61,0x01);if(settings.footer)centeredWrapped(command,text,safe(settings.footer),paperChars);else center(command,text,'Terima kasih atas kunjungan Anda!');command(0x1b,0x61,0x00);text('\n\n\n');command(0x1b,0x45,0x01);centeredWrapped(command,text,'POWERED BY YUPOS',paperChars);command(0x1b,0x45,0x00);text('\n\n');command(0x1b,0x32);command(0x1d,0x56,0x00);return new Uint8Array(bytes); }
