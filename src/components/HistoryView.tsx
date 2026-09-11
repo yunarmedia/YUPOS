@@ -1,9 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import { History as HistoryIcon, Search, Printer, Edit3, XCircle, Trash2, Lock, Eye, EyeOff, MessageCircle } from 'lucide-react';
-import { Order, OrderStatus, StoreSettings } from '../types';
+import { Order, OrderStatus, StoreSettings, PortalPins } from '../types';
 import { shareReceiptImage } from '../services/receiptImageService';
 
 interface HistoryViewProps { orders: Order[]; settings: StoreSettings; onEditOrder: (order: Order) => void; onReprintOrder: (order: Order) => void; onCancelOrder: (orderId: string, currentStatus: OrderStatus) => void; onDeleteOrderPermanently: (orderId: string) => void; onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void; }
+
+const readLatestPortalPins = (fallback: PortalPins): PortalPins => {
+  try {
+    const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null');
+    const uid = String(session?.uid || '').trim();
+    if (!uid) return fallback;
+    const stored = JSON.parse(localStorage.getItem(`yupos_${uid}_settings`) || 'null');
+    if (stored?.portalPins && typeof stored.portalPins === 'object') return stored.portalPins as PortalPins;
+  } catch {
+    // Keep the React state as a safe fallback when local storage is unavailable/malformed.
+  }
+  return fallback;
+};
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ orders, settings, onEditOrder, onReprintOrder, onCancelOrder, onDeleteOrderPermanently, onShowToast }) => {
   const [activeFilter, setActiveFilter] = useState<OrderStatus | 'all'>('selesai');
@@ -16,7 +29,19 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ orders, settings, onEd
   const formatRp = (num: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(num || 0);
   const filteredOrders = useMemo(() => orders.filter((order) => { const matchesStatus = activeFilter === 'all' || order.status === activeFilter; const q = searchQuery.trim().toLowerCase(); const matchesSearch = !q || [order.id, order.customer, order.payment, order.customerPhone, order.customerCode].some((v) => String(v ?? '').toLowerCase().includes(q)); return matchesStatus && matchesSearch; }), [orders, activeFilter, searchQuery]);
   const startAction = (type: 'edit' | 'delete' | 'cancel', order: Order) => { setActionModal({ type, order }); setEnteredPin(''); setPinError(null); setShowPin(false); };
-  const verify = (e: React.FormEvent) => { e.preventDefault(); if (!actionModal) return; const pin = actionModal.type === 'edit' ? settings.portalPins?.historyEditPin : actionModal.type === 'delete' ? settings.portalPins?.historyDeletePin : settings.portalPins?.historyCancelPin; if (pin && enteredPin !== pin) { setPinError('Sandi otorisasi salah.'); return; } const { type, order } = actionModal; setActionModal(null); if (type === 'edit') onEditOrder(order); if (type === 'delete') onDeleteOrderPermanently(order.id); if (type === 'cancel') onCancelOrder(order.id, order.status); onShowToast('Aksi transaksi berhasil diproses.', 'success'); };
+  const verify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actionModal) return;
+    const latestPins = readLatestPortalPins(settings.portalPins || {});
+    const pin = actionModal.type === 'edit' ? latestPins.historyEditPin : actionModal.type === 'delete' ? latestPins.historyDeletePin : latestPins.historyCancelPin;
+    if (pin && enteredPin !== pin) { setPinError('Sandi otorisasi salah. Gunakan PIN yang saat ini tersimpan di Portal Otoritas Kontrol Admin.'); return; }
+    const { type, order } = actionModal;
+    setActionModal(null);
+    if (type === 'edit') onEditOrder(order);
+    if (type === 'delete') onDeleteOrderPermanently(order.id);
+    if (type === 'cancel') onCancelOrder(order.id, order.status);
+    onShowToast('Aksi transaksi berhasil diproses.', 'success');
+  };
   const shareReceiptWhatsApp = async (order: Order) => {
     if (!order.customerPhone) { onShowToast('Nomor WhatsApp customer belum tersedia pada transaksi ini.', 'warning'); return; }
     setSharingOrderId(order.id);
