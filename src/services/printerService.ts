@@ -19,18 +19,27 @@ async function connectDevice(device: BluetoothDevice): Promise<{ device: Bluetoo
   if (!device.gatt) throw new Error('Printer tidak menyediakan koneksi GATT/BLE.'); const server = device.gatt.connected ? device.gatt : await device.gatt.connect(); const characteristic = await findWritableCharacteristic(server);
   if (!characteristic) { try { device.gatt.disconnect(); } catch {} throw new Error('Channel BLE ESC/POS printer tidak ditemukan.'); } return { device, characteristic };
 }
-function showYuposBluetoothDialog(openNativeChooser: () => Promise<BluetoothDevice>, deviceType: 'kasir' | 'dapur'): Promise<BluetoothDevice | null> {
-  return new Promise((resolve) => {
-    document.getElementById('yupos-bluetooth-dialog')?.remove(); const overlay = document.createElement('div'); overlay.id = 'yupos-bluetooth-dialog';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(2,6,23,.64);backdrop-filter:blur(10px);font-family:Plus Jakarta Sans,Inter,system-ui,sans-serif'; const label = deviceType === 'dapur' ? 'Printer Dapur' : 'Printer Kasir';
-    overlay.innerHTML = `<div role="dialog" aria-modal="true" style="width:min(430px,100%);background:#fff;border-radius:26px;box-shadow:0 28px 90px rgba(2,6,23,.34);overflow:hidden"><div style="padding:24px 22px 20px;background:linear-gradient(145deg,#eff6ff,#fff 68%);border-bottom:1px solid #e8eef6"><div style="display:flex;gap:14px;align-items:center"><div style="width:52px;height:52px;border-radius:17px;background:linear-gradient(145deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px">⌁</div><div><div style="font-size:17px;font-weight:900;color:#0f172a">Hubungkan Printer</div><div style="display:flex;gap:7px;margin-top:6px;font-size:11px;font-weight:800;color:#64748b"><span style="padding:4px 8px;border-radius:999px;background:#dbeafe;color:#1d4ed8">YUPOS</span><span>${label}</span></div></div></div></div><div style="padding:20px 22px 22px"><div style="padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:16px;font-size:11px;line-height:1.55;color:#64748b;font-weight:600">Pilih perangkat Bluetooth pada pemilih resmi Chrome. Printer harus menyala dan mendukung BLE / ESC-POS.</div><div style="display:flex;gap:10px;margin-top:21px"><button id="yupos-bt-cancel" type="button" style="flex:1;min-height:46px;border-radius:14px;border:1px solid #dbe3ee;background:#f8fafc;color:#475569;font-weight:850">Batal</button><button id="yupos-bt-continue" type="button" style="flex:1.45;min-height:46px;border:0;border-radius:14px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;font-weight:900">Pilih Printer Bluetooth</button></div></div></div>`;
-    const cancel = () => { overlay.remove(); resolve(null); }; const btn = overlay.querySelector<HTMLButtonElement>('#yupos-bt-continue'); const cancelBtn = overlay.querySelector<HTMLButtonElement>('#yupos-bt-cancel'); cancelBtn?.addEventListener('click', cancel); overlay.addEventListener('click', (e) => { if (e.target === overlay) cancel(); });
-    btn?.addEventListener('click', async () => { if (!btn) return; btn.disabled = true; btn.textContent = 'Membuka Bluetooth...'; try { const d = await openNativeChooser(); overlay.remove(); resolve(d); } catch (e) { btn.disabled = false; btn.textContent = 'Pilih Printer Bluetooth'; if (!/cancel/i.test(e instanceof Error ? e.message : '')) { const n = document.createElement('div'); n.textContent = 'Pemilih Bluetooth tidak dapat dibuka. Pastikan Chrome HTTPS dan Bluetooth aktif.'; n.style.cssText = 'margin-top:10px;padding:9px 11px;border-radius:11px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;font-size:10.5px;font-weight:700'; btn.parentElement?.before(n); } } }); document.body.appendChild(overlay); btn?.focus();
-  });
-}
+
+/**
+ * IMPORTANT: call the native Web Bluetooth chooser directly from the original
+ * user click. A custom async modal before requestDevice() can break Chrome's
+ * user-activation chain and result in no native chooser appearing.
+ */
 export async function requestBluetoothPrinter(deviceType: 'kasir' | 'dapur' = 'kasir'): Promise<{ device: BluetoothDevice; characteristic: BluetoothRemoteGATTCharacteristic }> {
-  if (!('bluetooth' in navigator)) throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge dengan Bluetooth BLE.'); const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined; if (!bluetooth) throw new Error('Bluetooth API tidak tersedia.'); const device = await showYuposBluetoothDialog(() => bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: OPTIONAL_SERVICES }), deviceType); if (!device) throw new Error('User cancelled'); return connectDevice(device);
+  void deviceType;
+  if (!window.isSecureContext) throw new Error('Bluetooth membutuhkan HTTPS / secure context.');
+  if (!('bluetooth' in navigator)) throw new Error('Web Bluetooth tidak didukung browser ini. Gunakan Chrome/Edge dengan Bluetooth BLE.');
+  const bluetooth = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined;
+  if (!bluetooth?.requestDevice) throw new Error('Bluetooth API tidak tersedia di browser ini.');
+
+  // Keep this call directly inside the React button's async handler.
+  const device = await bluetooth.requestDevice({
+    acceptAllDevices: true,
+    optionalServices: OPTIONAL_SERVICES,
+  });
+  return connectDevice(device);
 }
+
 export async function reconnectBluetoothPrinter(device: BluetoothDevice): Promise<BluetoothRemoteGATTCharacteristic> { return (await connectDevice(device)).characteristic; }
 export async function getPreviouslyAuthorizedPrinters(): Promise<BluetoothDevice[]> { const b = (navigator as Navigator & { bluetooth?: Bluetooth }).bluetooth as BluetoothWithGetDevices | undefined; if (!b?.getDevices) return []; try { return await b.getDevices(); } catch { return []; } }
 export async function sendBluetoothData(characteristic: BluetoothRemoteGATTCharacteristic, data: Uint8Array | PromiseLike<Uint8Array>): Promise<void> {
