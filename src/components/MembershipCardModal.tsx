@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { Award, CheckCircle2, Crown, Gift, History, Phone, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { Customer, MembershipRewardType } from '../types';
-import { Barcode128 } from './Barcode128';
 import { QRCodeMembership } from './QRCodeMembership';
 import { buildMembershipScanUrl, buildMembershipSnapshot } from '../services/membershipService';
 
@@ -28,17 +27,9 @@ export const MembershipCardModal: React.FC<MembershipCardModalProps> = ({ custom
 
       <div className="p-5 space-y-4">
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-          <div className="flex items-center gap-2 text-xs font-black text-slate-800"><ShieldCheck className="w-4 h-4 text-blue-600" /> Barcode & QR Verifikasi Membership</div>
-          <div className="mt-3 grid gap-3">
-            <div className="overflow-x-auto rounded-xl bg-white border border-slate-200 p-3 flex justify-center">
-              <div className="shrink-0 text-center">
-                <Barcode128 value={scanUrl} height={58} moduleWidth={1.1} className="mx-auto" />
-                <div className="mt-1 font-mono text-[10px] font-black tracking-[.22em] text-slate-700">{customer.customerCode}</div>
-              </div>
-            </div>
-            <div className="rounded-xl bg-white border border-slate-200 p-3 flex justify-center overflow-x-auto"><QRCodeMembership value={scanUrl} size={180} className="shrink-0" /></div>
-          </div>
-          <p className="mt-2 text-[10px] text-slate-500 text-center">Barcode atau QR dapat dipindai untuk membuka rincian membership pada halaman verifikasi YUPOS.</p>
+          <div className="flex items-center gap-2 text-xs font-black text-slate-800"><ShieldCheck className="w-4 h-4 text-blue-600" /> QR Verifikasi Membership</div>
+          <div className="mt-3 overflow-x-auto rounded-xl bg-white border border-slate-200 p-3 flex justify-center"><QRCodeMembership value={scanUrl} size={260} className="shrink-0" /></div>
+          <p className="mt-2 text-[10px] text-slate-500 text-center">Scan QR untuk membuka rincian membership pada halaman verifikasi YUPOS.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-2"><div className="rounded-2xl border border-slate-200 p-3"><div className="text-[10px] font-bold text-slate-400">MEMBER SEJAK</div><div className="mt-1 text-sm font-black">{customer.memberSince || '-'}</div></div><div className="rounded-2xl border border-slate-200 p-3"><div className="text-[10px] font-bold text-slate-400">KUNJUNGAN TERAKHIR</div><div className="mt-1 text-sm font-black">{customer.lastVisit || '-'}</div></div></div>
