@@ -5,6 +5,7 @@ import { AuthBootstrap } from './components/AuthBootstrap';
 import { UpdateNotice } from './components/UpdateNotice';
 import './customPaymentEnhancer';
 import './index.css';
+import './premium-ui.css';
 
 function readPortalPins(): Record<string, string> {
   try {
@@ -82,7 +83,6 @@ function installYuposConfirmBridge() {
     if (bypassNextConfirm) return;
     const target = event.target as HTMLElement | null; const button = target?.closest('button') as HTMLButtonElement | null; if (!button) return;
 
-    // Mobile top shortcut to Printer must use the same authority as Sidebar.
     if ((button.textContent || '').trim() === '🖨️') {
       const pin = readPortalPins().printer || '';
       if (pin) { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); openPin('Otorisasi Printer', pin, () => button.click()); return; }
