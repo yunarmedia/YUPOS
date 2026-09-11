@@ -154,6 +154,7 @@ export interface StoreSettings {
   categories: string[];
   staffRoles: string[];
   staffList: Record<string, string[]>;
+  customPaymentMethods?: string[];
 }
 
 export interface MerchantUser {
