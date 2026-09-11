@@ -120,18 +120,30 @@ export interface Expense {
 
 export interface PortalPins {
   admin?: string;
-  expenses: string;
-  inventory: string;
-  staff: string;
-  settings: string;
+  pos?: string;
+  customers?: string;
+  revenue?: string;
+  extract?: string;
+  expenses?: string;
+  inventory?: string;
+  staff?: string;
+  printer?: string;
+  settings?: string;
+  history?: string;
   historyDeletePin?: string;
   historyEditPin?: string;
   historyCancelPin?: string;
+  productEditPin?: string;
+  productDeletePin?: string;
+  customerEditPin?: string;
+  customerDeletePin?: string;
+  expenseEditPin?: string;
+  expenseDeletePin?: string;
+  customPaymentPin?: string;
 }
 
 export interface StoreSettings {
   businessType: BusinessType;
-  /** Merchant-defined business label shown throughout the POS UI. */
   customBusinessTypeName?: string;
   storeName: string;
   storeAddress: string;
@@ -163,7 +175,6 @@ export interface MerchantUser {
   displayName: string | null;
 }
 
-/** Lifetime license status. Access remains active until developer/admin suspends it. */
 export type MerchantLicenseStatus = 'active' | 'suspended' | 'pending';
 
 export interface MerchantProfile {

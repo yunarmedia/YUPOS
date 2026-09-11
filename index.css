@@ -55,6 +55,11 @@ textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Legacy custom-payment manager is now admin-only. Its POS buttons and omzet breakdown remain active. */
+#yupos-custom-payment-manager .yp-pay-launcher {
+  display: none !important;
+}
+
 @keyframes yupos-logo-in {
   0% { opacity: 0; transform: scale(.86) translateY(16px); filter: blur(10px); }
   65% { opacity: 1; transform: scale(1.02) translateY(0); filter: blur(0); }
