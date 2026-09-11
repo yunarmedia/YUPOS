@@ -1,4 +1,4 @@
-import { doc, runTransaction, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Order, Expense, ProductItem, StoreSettings, BusinessType } from '../types';
 
@@ -171,20 +171,55 @@ function createCollisionSafeOrderId(): string {
   return `ORD-${date}-${time}-${randomPart}`;
 }
 
-function normalizeOrderIds(orders: Order[], existingIds: Set<string> = new Set()): Order[] {
-  const used = new Set<string>(existingIds);
+/**
+ * Preserve existing order IDs. Generate an ID only when it is missing or
+ * duplicated inside the incoming list. The previous implementation treated
+ * every existing ID as a collision and could create a new ID on each save,
+ * which caused the same payment to appear multiple times after repeated syncs.
+ */
+function normalizeOrderIds(orders: Order[]): Order[] {
+  const used = new Set<string>();
   return orders.map((order) => {
     let id = String(order.id || '').trim();
-    const isNewLegacyId = /^ORD-[A-Z0-9]+$/.test(id) && !existingIds.has(id);
-    if (!id || isNewLegacyId || used.has(id)) {
+    if (!id || used.has(id)) {
       do {
         id = createCollisionSafeOrderId();
       } while (used.has(id));
     }
     used.add(id);
-    if (id === order.id) return order;
-    return { ...order, id };
+    return id === order.id ? order : { ...order, id };
   });
+}
+
+/**
+ * Conservative duplicate detector for legacy data already written before the
+ * persistence fix. It intentionally requires the same timestamp, total,
+ * customer/payment identity and line items, so two genuine sales with merely
+ * the same amount are not merged.
+ */
+function orderFingerprint(order: Order): string {
+  return JSON.stringify({
+    timestamp: Number(order.timestamp || 0),
+    date: order.date || '',
+    time: order.time || '',
+    total: Number(order.total || 0),
+    customer: order.customer || '',
+    customerCode: order.customerCode || '',
+    payment: order.payment || '',
+    items: order.items || [],
+  });
+}
+
+function dedupeOrders(orders: Order[]): Order[] {
+  const seen = new Set<string>();
+  const result: Order[] = [];
+  for (const order of orders) {
+    const fingerprint = orderFingerprint(order);
+    if (seen.has(fingerprint)) continue;
+    seen.add(fingerprint);
+    result.push(order);
+  }
+  return result;
 }
 
 export function loadMerchantOrders(merchantId: string, businessType: BusinessType): Order[] {
@@ -193,7 +228,11 @@ export function loadMerchantOrders(merchantId: string, businessType: BusinessTyp
   const raw = localStorage.getItem(key);
   if (!raw) return [];
   try {
-    return normalizeOrderIds(JSON.parse(raw) as Order[]);
+    const parsed = JSON.parse(raw) as Order[];
+    const deduped = dedupeOrders(parsed);
+    const normalized = normalizeOrderIds(deduped).map((order) => ({ ...order, merchantId, businessType }));
+    if (JSON.stringify(normalized) !== JSON.stringify(parsed)) saveLocalData(key, normalized);
+    return normalized;
   } catch {
     return [];
   }
@@ -203,12 +242,8 @@ export function saveMerchantOrders(merchantId: string, businessType: BusinessTyp
   if (!isValidMerchantId(merchantId)) return;
   const id = requireMerchantId(merchantId);
   const key = getMerchantStorageKey(id, businessType, 'orders');
-  const current = loadLocalData<Order[]>(key, []);
-  const existingIds = new Set(current.map((order) => String(order.id || '')));
-  const normalized = normalizeOrderIds(
-    orders.map((order) => ({ ...order, merchantId: id, businessType })),
-    existingIds,
-  );
+  const sanitized = orders.map((order) => ({ ...order, merchantId: id, businessType }));
+  const normalized = normalizeOrderIds(dedupeOrders(sanitized));
   saveLocalData(key, normalized);
 }
 
@@ -283,6 +318,11 @@ export async function syncProductsToFirebase(
   }
 }
 
+/**
+ * Firebase order storage is authoritative for the exact current list sent by
+ * the app. This is intentionally a replacement, not a merge: a record removed
+ * with the permanent-delete action must not be resurrected from Firestore.
+ */
 export async function syncOrdersToFirebase(
   orders: Order[],
   merchantId: string = '',
@@ -291,48 +331,16 @@ export async function syncOrdersToFirebase(
   try {
     const id = requireMerchantId(merchantId);
     const key = getMerchantStorageKey(id, businessType, 'orders');
-    const localCurrent = loadLocalData<Order[]>(key, []);
-    const localNormalized = normalizeOrderIds(
-      orders.map((order) => ({ ...order, merchantId: id, businessType })),
-      new Set(localCurrent.map((order) => String(order.id || ''))),
-    );
-    saveLocalData(key, localNormalized);
+    const sanitized = orders.map((order) => ({ ...order, merchantId: id, businessType }));
+    const normalized = normalizeOrderIds(dedupeOrders(sanitized));
+    saveLocalData(key, normalized);
 
     const ordersRef = doc(db, 'yupos_transactions', id, businessType, 'orders');
-    await runTransaction(db, async (transaction) => {
-      const snapshot = await transaction.get(ordersRef);
-      const remoteOrders = snapshot.exists() ? ((snapshot.data().list || []) as Order[]) : [];
-      const remoteById = new Map<string, Order>(remoteOrders.map((order) => [String(order.id || ''), order]));
-      const merged = [...remoteOrders];
-
-      for (const incoming of localNormalized) {
-        const safeIncoming = { ...incoming, merchantId: id, businessType };
-        const orderId = String(safeIncoming.id || '');
-        const remote = remoteById.get(orderId);
-        if (!remote) {
-          merged.push(safeIncoming);
-          continue;
-        }
-        if (Number(remote.timestamp) === Number(safeIncoming.timestamp)) {
-          const index = merged.findIndex((order) => String(order.id || '') === orderId);
-          if (index >= 0) merged[index] = safeIncoming;
-        } else {
-          let replacementId = createCollisionSafeOrderId();
-          while (remoteById.has(replacementId) || merged.some((order) => String(order.id || '') === replacementId)) {
-            replacementId = createCollisionSafeOrderId();
-          }
-          merged.push({ ...safeIncoming, id: replacementId });
-        }
-      }
-
-      const finalList = normalizeOrderIds(merged).map((order) => ({ ...order, merchantId: id, businessType }));
-      transaction.set(
-        ordersRef,
-        { list: finalList, merchantId: id, businessType, updatedAt: Date.now() },
-        { merge: true },
-      );
-      saveLocalData(key, finalList);
-    });
+    await setDoc(
+      ordersRef,
+      { list: normalized, merchantId: id, businessType, updatedAt: Date.now() },
+      { merge: true },
+    );
     return true;
   } catch (err) {
     console.warn('Firebase orders sync warning:', err);
