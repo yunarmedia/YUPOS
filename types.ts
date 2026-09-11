@@ -100,15 +100,15 @@ export interface Expense {
 export interface PortalPins {
   admin?: string;
   pos?: string;
-  customers: string;
-  revenue: string;
-  extract: string;
-  expenses: string;
-  inventory: string;
-  history: string;
-  staff: string;
-  printer: string;
-  settings: string;
+  customers?: string;
+  revenue?: string;
+  extract?: string;
+  expenses?: string;
+  inventory?: string;
+  history?: string;
+  staff?: string;
+  printer?: string;
+  settings?: string;
   historyDeletePin?: string;
   historyEditPin?: string;
   productEditPin?: string;
