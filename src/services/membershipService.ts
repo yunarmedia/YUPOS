@@ -1,124 +1,14 @@
-import { Customer, MembershipVisit } from '../types';
+import { Customer, MembershipReward, MembershipVisit, StoreSettings } from '../types';
 import { loadMerchantOrders } from './storageService';
+import { getMembershipRewards, getBestMembershipReward } from './membershipRewardService';
 
-function toBase64Url(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunkSize) binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function normalizeText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '?');
-}
-
-function formatCreatedAt(createdAt?: number): string | undefined {
-  if (!createdAt) return undefined;
-  try {
-    return new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(createdAt));
-  } catch {
-    return undefined;
-  }
-}
-
-export interface MembershipSnapshot {
-  app: 'YUPOS';
-  version: 1;
-  code: string;
-  name: string;
-  phone: string;
-  visits: number;
-  memberSince?: string;
-  totalSpent: number;
-  lastVisit: string;
-  reward: 'none' | 'discount50' | 'freeHaircut';
-  visitDetails?: MembershipVisit[];
-}
-
-export function getMembershipReward(customer: Customer): MembershipSnapshot['reward'] {
-  if ((customer.visitCount || 0) >= 10) return 'freeHaircut';
-  if ((customer.visitCount || 0) >= 5) return 'discount50';
-  return 'none';
-}
-
-function deriveVisitDetails(customer: Customer): MembershipVisit[] {
-  const stored = customer.membershipVisits || [];
-  if (stored.length) return stored.slice(-10);
-  try {
-    const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || '';
-    const settingsRaw = localStorage.getItem(`yupos_${merchantId}_settings`);
-    const businessType = settingsRaw ? JSON.parse(settingsRaw)?.businessType || 'barbershop' : 'barbershop';
-    const orders = loadMerchantOrders(merchantId, businessType);
-    return orders.filter((order) => order.status === 'selesai' && order.customerCode === customer.customerCode).slice(-(customer.visitCount || 0)).map((order) => ({
-      id: `ORDER-${order.id}`, date: order.date, time: order.time, amount: order.total || 0, orderId: order.id,
-      services: order.items.filter((item) => item.type === 'service').map((item) => item.name),
-      staff: Array.from(new Set(order.items.map((item) => item.assignedTo).filter(Boolean) as string[])),
-    }));
-  } catch { return []; }
-}
-
-export function buildMembershipSnapshot(customer: Customer): MembershipSnapshot {
-  const visits = deriveVisitDetails(customer);
-  const latest = visits[visits.length - 1];
-  return {
-    app: 'YUPOS', version: 1, code: normalizeText(customer.customerCode), name: normalizeText(customer.name),
-    phone: normalizeText(customer.phone || ''), visits: customer.visitCount || 0,
-    memberSince: normalizeText(customer.memberSince || formatCreatedAt(customer.createdAt) || '-'),
-    totalSpent: customer.totalSpent || 0,
-    lastVisit: normalizeText(customer.lastVisit || (latest ? `${latest.date} ${latest.time}`.trim() : '-')),
-    reward: getMembershipReward(customer), visitDetails: visits,
-  };
-}
-
-/**
- * Compact payload used by printed/on-screen membership QR.
- * Keep it small enough for reliable thermal printing while carrying the
- * information needed by a phone to render the member verification card.
- */
-export function buildMembershipQrSnapshot(customer: Customer) {
-  const visits = deriveVisitDetails(customer);
-  const latest = visits[visits.length - 1];
-  const latestOrderItems = latest
-    ? (() => {
-        try {
-          const merchantId = customer.merchantId || JSON.parse(localStorage.getItem('yupos_merchant_session') || '{}')?.uid || '';
-          const settingsRaw = localStorage.getItem(`yupos_${merchantId}_settings`);
-          const businessType = settingsRaw ? JSON.parse(settingsRaw)?.businessType || 'barbershop' : 'barbershop';
-          const orders = loadMerchantOrders(merchantId, businessType);
-          const order = orders.find((candidate) => candidate.id === latest.orderId);
-          return order?.items.map((item) => `${item.name}${item.qty > 1 ? ` x${item.qty}` : ''}`).slice(0, 4) || latest.services.slice(0, 4);
-        } catch { return latest.services.slice(0, 4); }
-      })()
-    : [];
-
-  const recentVisits = visits.slice(-5).reverse().map((visit) => ({
-    d: normalizeText(visit.date),
-    t: normalizeText(visit.time),
-    a: Math.round(visit.amount || 0),
-    s: normalizeText(visit.services.join(', ') || 'Layanan barbershop').slice(0, 100),
-    f: normalizeText(visit.staff.join(', ')).slice(0, 80),
-  }));
-
-  return {
-    a: 'Y',
-    v: 4,
-    c: normalizeText(customer.customerCode),
-    n: normalizeText(customer.name),
-    p: normalizeText(customer.phone || ''),
-    i: customer.visitCount || 0,
-    r: getMembershipReward(customer),
-    ms: normalizeText(customer.memberSince || formatCreatedAt(customer.createdAt) || '-'),
-    ts: Math.round(customer.totalSpent || 0),
-    lv: normalizeText(customer.lastVisit || (latest ? `${latest.date} ${latest.time}`.trim() : '-')),
-    li: latestOrderItems.map(normalizeText).join(' | ').slice(0, 180),
-    vh: recentVisits,
-  } as const;
-}
-
-export function buildMembershipScanUrl(customer: Customer): string {
-  const payload = toBase64Url(JSON.stringify(buildMembershipQrSnapshot(customer)));
-  const url = new URL('./member.html', window.location.href);
-  url.searchParams.set('d', payload);
-  return url.toString();
-}
+function toBase64Url(value:string):string{const bytes=new TextEncoder().encode(value);let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');}
+function normalizeText(value:string):string{return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\x20-\x7E]/g,'?');}
+function formatCreatedAt(createdAt?:number):string|undefined{if(!createdAt)return undefined;try{return new Intl.DateTimeFormat('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(createdAt));}catch{return undefined;}}
+function resolveSettings(customer:Customer):StoreSettings|undefined{try{const merchantId=customer.merchantId||JSON.parse(localStorage.getItem('yupos_merchant_session')||'{}')?.uid||'';if(!merchantId)return undefined;const raw=localStorage.getItem(`yupos_${merchantId}_settings`);return raw?JSON.parse(raw) as StoreSettings:undefined;}catch{return undefined;}}
+export interface MembershipSnapshot{app:'YUPOS';version:1;code:string;name:string;phone:string;visits:number;memberSince?:string;totalSpent:number;lastVisit:string;reward:MembershipReward|null;visitDetails?:MembershipVisit[];rewards?:MembershipReward[];}
+export function getMembershipReward(customer:Customer,settings?:StoreSettings):MembershipReward|null{return getBestMembershipReward(customer,settings||resolveSettings(customer));}
+function deriveVisitDetails(customer:Customer):MembershipVisit[]{const stored=customer.membershipVisits||[];if(stored.length)return stored.slice(-Math.max(10,customer.visitCount||0));try{const merchantId=customer.merchantId||JSON.parse(localStorage.getItem('yupos_merchant_session')||'{}')?.uid||'';const settingsRaw=localStorage.getItem(`yupos_${merchantId}_settings`);const businessType=settingsRaw?JSON.parse(settingsRaw)?.businessType||'barbershop':'barbershop';return loadMerchantOrders(merchantId,businessType).filter(o=>o.status==='selesai'&&o.customerCode===customer.customerCode).slice(-(customer.visitCount||0)).map(o=>({id:`ORDER-${o.id}`,date:o.date,time:o.time,amount:o.total||0,orderId:o.id,services:o.items.map(i=>i.name),staff:Array.from(new Set(o.items.map(i=>i.assignedTo).filter(Boolean) as string[]))}));}catch{return[];}}
+export function buildMembershipSnapshot(customer:Customer):MembershipSnapshot{const settings=resolveSettings(customer),visits=deriveVisitDetails(customer),latest=visits[visits.length-1],rewards=getMembershipRewards(settings);return{app:'YUPOS',version:1,code:normalizeText(customer.customerCode),name:normalizeText(customer.name),phone:normalizeText(customer.phone||''),visits:customer.visitCount||0,memberSince:normalizeText(customer.memberSince||formatCreatedAt(customer.createdAt)||'-'),totalSpent:customer.totalSpent||0,lastVisit:normalizeText(customer.lastVisit||(latest?`${latest.date} ${latest.time}`.trim():'-')),reward:getMembershipReward(customer,settings),visitDetails:visits,rewards};}
+export function buildMembershipQrSnapshot(customer:Customer){const settings=resolveSettings(customer),visits=deriveVisitDetails(customer),latest=visits[visits.length-1],rewards=getMembershipRewards(settings);const latestOrderItems=latest?(()=>{try{const merchantId=customer.merchantId||JSON.parse(localStorage.getItem('yupos_merchant_session')||'{}')?.uid||'';const businessType=settings?.businessType||'barbershop';const order=loadMerchantOrders(merchantId,businessType).find(o=>o.id===latest.orderId);return order?.items.map(i=>`${i.name}${i.qty>1?` x${i.qty}`:''}`).slice(0,4)||latest.services.slice(0,4);}catch{return latest.services.slice(0,4);}})():[];const recentVisits=visits.slice(-5).reverse().map(v=>({d:normalizeText(v.date),t:normalizeText(v.time),a:Math.round(v.amount||0),s:normalizeText(v.services.join(', ')||'Layanan').slice(0,100),f:normalizeText(v.staff.join(', ')).slice(0,80)}));return{a:'Y',v:5,c:normalizeText(customer.customerCode),n:normalizeText(customer.name),p:normalizeText(customer.phone||''),i:customer.visitCount||0,r:getMembershipReward(customer,settings),rw:rewards.map(r=>({id:r.id,n:normalizeText(r.name),t:r.type,v:r.value,rv:r.requiredVisits,d:normalizeText(r.description||''),it:normalizeText(r.itemName||'')})),ms:normalizeText(customer.memberSince||formatCreatedAt(customer.createdAt)||'-'),ts:Math.round(customer.totalSpent||0),lv:normalizeText(customer.lastVisit||(latest?`${latest.date} ${latest.time}`.trim():'-')),li:latestOrderItems.map(normalizeText).join(' | ').slice(0,180),vh:recentVisits} as const;}
+export function buildMembershipScanUrl(customer:Customer):string{const payload=toBase64Url(JSON.stringify(buildMembershipQrSnapshot(customer)));const url=new URL('./member.html',window.location.href);url.searchParams.set('d',payload);return url.toString();}
