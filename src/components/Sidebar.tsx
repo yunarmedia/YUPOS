@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ReceiptText, History, UsersRound, WalletCards, ChartNoAxesCombined, Database, BriefcaseBusiness, Printer, Settings2, ShieldCheck, LogOut, Briefcase, Scissors, Sparkles, Utensils, Shirt, Wrench, ChevronRight, X, Lock, Eye, EyeOff } from 'lucide-react';
+import { ReceiptText, History, UsersRound, WalletCards, ChartNoAxesCombined, Database, BriefcaseBusiness, Printer, Settings2, ShieldCheck, LogOut, Briefcase, Scissors, Sparkles, Utensils, Shirt, Wrench, ChevronRight, X, Lock, Eye, EyeOff, Package } from 'lucide-react';
 import { StoreSettings, MerchantUser, BusinessType, PortalPins } from '../types';
 import { BUSINESS_PRESETS } from '../config/businessCategories';
 import { syncConfigToFirebase } from '../services/storageService';
@@ -7,8 +7,7 @@ import { YuposLogo } from './YuposLogo';
 import { AdminModal } from './AdminModal';
 
 interface SidebarProps { activeTab: string; onSelectTab: (tabId: string) => void; settings: StoreSettings; merchant: MerchantUser | null; onLogout: () => void; isOpen?: boolean; onClose?: () => void; }
-
-const PROTECTED_TABS: Record<string, keyof PortalPins> = { pos: 'pos', customers: 'customers', revenue: 'revenue', extract: 'extract', history: 'history', printer: 'printer' };
+const PROTECTED_TABS: Record<string, keyof PortalPins> = { pos: 'pos', customers: 'customers', revenue: 'revenue', extract: 'extract', expenses: 'expenses', inventory: 'inventory', history: 'history', staff: 'staff', printer: 'printer', settings: 'settings' };
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settings, merchant, onLogout, isOpen = false, onClose }) => {
   const activeShiftName = settings.activeShift === '1' ? settings.shift1Name : settings.shift2Name;
@@ -18,19 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [showPin, setShowPin] = useState(false);
-
-  const getBusinessIcon = (type: BusinessType) => {
-    switch (type) {
-      case 'barbershop': return <Scissors className="w-3.5 h-3.5" />;
-      case 'salon': return <Sparkles className="w-3.5 h-3.5" />;
-      case 'fnb': return <Utensils className="w-3.5 h-3.5" />;
-      case 'retail': return <Briefcase className="w-3.5 h-3.5" />;
-      case 'laundry': return <Shirt className="w-3.5 h-3.5" />;
-      case 'workshop': return <Wrench className="w-3.5 h-3.5" />;
-      default: return <Briefcase className="w-3.5 h-3.5" />;
-    }
-  };
-
+  const getBusinessIcon = (type: BusinessType) => { switch (type) { case 'barbershop': return <Scissors className="w-3.5 h-3.5" />; case 'salon': return <Sparkles className="w-3.5 h-3.5" />; case 'fnb': return <Utensils className="w-3.5 h-3.5" />; case 'retail': return <Briefcase className="w-3.5 h-3.5" />; case 'laundry': return <Shirt className="w-3.5 h-3.5" />; case 'workshop': return <Wrench className="w-3.5 h-3.5" />; default: return <Briefcase className="w-3.5 h-3.5" />; } };
   const navItems = [
     { id: 'pos', label: 'TRANSAKSI', icon: ReceiptText },
     { id: 'history', label: 'RIWAYAT', icon: History },
@@ -38,43 +25,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
     { id: 'expenses', label: 'PENGELUARAN', icon: WalletCards },
     { id: 'revenue', label: 'OMZET & KAS', icon: ChartNoAxesCombined },
     { id: 'extract', label: 'EKSTRAK DATA', icon: Database },
+    { id: 'inventory', label: 'PRODUK & JASA', icon: Package },
     { id: 'staff', label: 'KARYAWAN & SHIFT', icon: BriefcaseBusiness },
     { id: 'printer', label: 'PRINTER', icon: Printer },
     { id: 'settings', label: 'PENGATURAN', icon: Settings2 },
   ];
-
-  const openPin = (title: string, expected: string, action: () => void) => {
-    if (!expected) { action(); return; }
-    setEnteredPin(''); setPinError(''); setShowPin(false); setPinModal({ title, expected, action });
-  };
-
-  const handleItemClick = (id: string) => {
-    if (id === 'admin') { openPin('Otoritas Admin Kontrol', settings.portalPins?.admin || '', () => setShowAdmin(true)); return; }
-    const pinKey = PROTECTED_TABS[id];
-    const expected = pinKey ? settings.portalPins?.[pinKey] || '' : '';
-    if (pinKey && expected) { openPin(`Akses ${navItems.find((item) => item.id === id)?.label || id}`, expected, () => onSelectTab(id)); return; }
-    onSelectTab(id);
-  };
-
-  const verifyPin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pinModal) return;
-    if (enteredPin === pinModal.expected) { const action = pinModal.action; setPinModal(null); setEnteredPin(''); setPinError(''); action(); }
-    else setPinError('PIN / Sandi salah.');
-  };
-
-  const handleAdminPinsUpdate = (pins: PortalPins) => {
-    const uid = merchant?.uid || 'default_merchant';
-    let customPaymentMethods = settings.customPaymentMethods || [];
-    try { customPaymentMethods = JSON.parse(localStorage.getItem(`yupos_${uid}_custom_payment_methods`) || 'null') || customPaymentMethods; } catch { /* keep current */ }
-    const nextSettings: StoreSettings = { ...settings, portalPins: pins, customPaymentMethods };
-    localStorage.setItem(`yupos_${uid}_settings`, JSON.stringify(nextSettings));
-    localStorage.setItem('yupos_settings', JSON.stringify(nextSettings));
-    void syncConfigToFirebase(nextSettings, uid).catch((error) => console.warn('Admin authority sync failed:', error));
-    window.dispatchEvent(new CustomEvent('yupos-admin-settings-updated'));
-    setShowAdmin(false);
-  };
-
+  const openPin = (title: string, expected: string, action: () => void) => { if (!expected) { action(); return; } setEnteredPin(''); setPinError(''); setShowPin(false); setPinModal({ title, expected, action }); };
+  const handleItemClick = (id: string) => { if (id === 'admin') { openPin('Otoritas Admin Kontrol', settings.portalPins?.admin || '', () => setShowAdmin(true)); return; } const pinKey = PROTECTED_TABS[id]; const expected = pinKey ? settings.portalPins?.[pinKey] || '' : ''; if (pinKey && expected) { openPin(`Akses ${navItems.find((item) => item.id === id)?.label || id}`, expected, () => onSelectTab(id)); return; } onSelectTab(id); };
+  const verifyPin = (e: React.FormEvent) => { e.preventDefault(); if (!pinModal) return; if (enteredPin === pinModal.expected) { const action = pinModal.action; setPinModal(null); setEnteredPin(''); setPinError(''); action(); } else setPinError('PIN / Sandi salah.'); };
+  const handleAdminPinsUpdate = (pins: PortalPins) => { const uid = merchant?.uid || 'default_merchant'; let customPaymentMethods = settings.customPaymentMethods || []; try { customPaymentMethods = JSON.parse(localStorage.getItem(`yupos_${uid}_custom_payment_methods`) || 'null') || customPaymentMethods; } catch {} const nextSettings: StoreSettings = { ...settings, portalPins: pins, customPaymentMethods }; localStorage.setItem(`yupos_${uid}_settings`, JSON.stringify(nextSettings)); localStorage.setItem('yupos_settings', JSON.stringify(nextSettings)); void syncConfigToFirebase(nextSettings, uid).catch((error) => console.warn('Admin authority sync failed:', error)); window.dispatchEvent(new CustomEvent('yupos-admin-settings-updated')); setShowAdmin(false); };
   return <>
     {isOpen && <div onClick={onClose} className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden" />}
     <aside className={`fixed md:static inset-y-0 left-0 z-50 flex h-full w-64 shrink-0 transform flex-col overflow-y-auto border-r border-blue-950/80 bg-slate-950 text-white shadow-2xl transition-transform duration-200 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
