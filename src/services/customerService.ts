@@ -4,50 +4,170 @@ import { doc, setDoc } from 'firebase/firestore';
 
 function requireMerchantId(merchantId: string): string {
   const id = String(merchantId || '').trim();
-  if (!id || id === 'default' || id === '') throw new Error('Merchant authentication is required before accessing customer data.');
+  if (!id || id === 'default') throw new Error('Merchant authentication is required before accessing customer data.');
   return id;
 }
 
-export function generateCustomerCode(name: string, phone: string): string { const lettersOnly = name.trim().replace(/[^a-zA-Z]/g, '').toUpperCase(); const namePrefix = lettersOnly.length >= 2 ? lettersOnly.substring(0, 2) : (lettersOnly + 'CU').substring(0, 2); const digitsOnly = phone.replace(/[^0-9]/g, ''); const phoneSuffix = digitsOnly.length >= 4 ? digitsOnly.slice(-4) : digitsOnly.padStart(4, '0'); return `${namePrefix}${phoneSuffix}`; }
+export function generateCustomerCode(name: string, phone: string): string {
+  const lettersOnly = name.trim().replace(/[^a-zA-Z]/g, '').toUpperCase();
+  const namePrefix = lettersOnly.length >= 2 ? lettersOnly.substring(0, 2) : (lettersOnly + 'CU').substring(0, 2);
+  const digitsOnly = phone.replace(/[^0-9]/g, '');
+  const phoneSuffix = digitsOnly.length >= 4 ? digitsOnly.slice(-4) : digitsOnly.padStart(4, '0');
+  return `${namePrefix}${phoneSuffix}`;
+}
 
 export const initialCustomers: Customer[] = [];
-
 export function getCustomerStorageKey(merchantId: string): string { return `yupos_${requireMerchantId(merchantId)}_customers`; }
+
 export function loadCustomers(merchantId: string): Customer[] {
   if (!String(merchantId || '').trim()) return [];
   try {
-    const key = getCustomerStorageKey(merchantId);
-    const raw = localStorage.getItem(key);
+    const raw = localStorage.getItem(getCustomerStorageKey(merchantId));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Customer[];
-    return parsed.map((customer) => ({ ...customer, membershipVisits: Array.isArray(customer.membershipVisits) ? customer.membershipVisits : [], membershipRedemptions: Array.isArray(customer.membershipRedemptions) ? customer.membershipRedemptions : [] }));
+    return parsed.map((customer) => ({
+      ...customer,
+      // Backward compatible migration: old membership visit records become permanent history.
+      visitHistory: Array.isArray(customer.visitHistory) ? customer.visitHistory : (Array.isArray(customer.membershipVisits) ? customer.membershipVisits : []),
+      membershipVisits: Array.isArray(customer.membershipVisits) ? customer.membershipVisits : [],
+      membershipRedemptions: Array.isArray(customer.membershipRedemptions) ? customer.membershipRedemptions : [],
+    }));
   } catch (err) { console.warn('Error loading customers from localStorage:', err); return []; }
 }
+
 export function saveCustomers(merchantId: string, customers: Customer[]): void {
   try { localStorage.setItem(getCustomerStorageKey(merchantId), JSON.stringify(customers)); } catch (err) { console.warn('Error saving customers from localStorage:', err); }
 }
+
 export async function syncCustomersToFirebase(merchantId: string, customers: Customer[]): Promise<boolean> {
   try {
     const id = requireMerchantId(merchantId);
     saveCustomers(id, customers);
     const sanitized = customers.map((customer) => ({ ...customer, merchantId: id }));
-    const custRef = doc(db, 'yupos_crm', id, 'customers', 'data');
-    await setDoc(custRef, { list: sanitized, merchantId: id, updatedAt: Date.now() }, { merge: true });
+    await setDoc(doc(db, 'yupos_crm', id, 'customers', 'data'), { list: sanitized, merchantId: id, updatedAt: Date.now() }, { merge: true });
     return true;
   } catch (err) { console.warn('Firebase customers sync warning:', err); return false; }
 }
-export function searchCustomerList(customers: Customer[], query: string): Customer[] { if (!query || !query.trim()) return customers; const q = query.trim().toLowerCase(); return customers.filter((c) => c.name.toLowerCase().includes(q) || c.customerCode.toLowerCase().includes(q) || c.phone.includes(q)); }
-export interface CustomerVisitMeta { orderId?: string; services?: string[]; staff?: string[]; date?: string; time?: string; }
-export function recordCustomerVisit(customers: Customer[], customerData: { name: string; phone: string; customerCode?: string; isMember?: boolean }, transactionAmount: number = 0, merchantId: string = '', visitMeta: CustomerVisitMeta = {}): Customer[] {
-  if (transactionAmount <= 0 || !String(merchantId || '').trim()) return customers;
-  const code = customerData.customerCode || generateCustomerCode(customerData.name, customerData.phone); const existingIdx = customers.findIndex((c) => c.customerCode.toUpperCase() === code.toUpperCase() || c.phone === customerData.phone); const now = new Date(); const todayStr = visitMeta.date || now.toISOString().split('T')[0]; const timeStr = visitMeta.time || now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }); const visit: MembershipVisit = { id: `VIS-${Date.now().toString(36).toUpperCase()}`, date: todayStr, time: timeStr, amount: transactionAmount, orderId: visitMeta.orderId, services: visitMeta.services || [], staff: visitMeta.staff || [] };
-  let updatedList: Customer[];
-  if (existingIdx > -1) { const existing = customers[existingIdx]; const shouldBeMember = customerData.isMember !== undefined ? (customerData.isMember || existing.isMember) : existing.isMember; updatedList = [...customers]; updatedList[existingIdx] = { ...existing, name: customerData.name.trim() || existing.name, phone: customerData.phone.trim() || existing.phone, customerCode: code, visitCount: existing.visitCount + 1, isMember: shouldBeMember, memberSince: shouldBeMember && !existing.isMember ? todayStr : (existing.memberSince || todayStr), totalSpent: (existing.totalSpent || 0) + transactionAmount, lastVisit: todayStr, membershipVisits: shouldBeMember ? [...(existing.membershipVisits || []), visit] : (existing.membershipVisits || []) }; }
-  else { const isMember = !!customerData.isMember; const newCustomer: Customer = { id: 'CUST-' + Date.now().toString(36).toUpperCase(), name: customerData.name.trim(), phone: customerData.phone.trim(), customerCode: code, visitCount: 1, isMember, memberSince: isMember ? todayStr : undefined, totalSpent: transactionAmount, lastVisit: todayStr, createdAt: Date.now(), membershipVisits: isMember ? [visit] : [], membershipRedemptions: [] }; updatedList = [newCustomer, ...customers]; }
-  saveCustomers(merchantId, updatedList); void syncCustomersToFirebase(merchantId, updatedList); return updatedList;
+
+export function searchCustomerList(customers: Customer[], query: string): Customer[] {
+  if (!query || !query.trim()) return customers;
+  const q = query.trim().toLowerCase();
+  return customers.filter((c) => c.name.toLowerCase().includes(q) || c.customerCode.toLowerCase().includes(q) || c.phone.includes(q));
 }
+
+export interface CustomerVisitMeta { orderId?: string; services?: string[]; staff?: string[]; date?: string; time?: string; }
+
+function readPendingReward(merchantId: string, customerCode: string): MembershipRewardType | null {
+  try {
+    const raw = localStorage.getItem(`yupos_${merchantId}_pending_membership_reward`);
+    if (!raw) return null;
+    const pending = JSON.parse(raw) as { customerCode?: string; reward?: MembershipRewardType; createdAt?: number };
+    if (Date.now() - Number(pending.createdAt || 0) >= 15 * 60 * 1000) return null;
+    if (String(pending.customerCode || '').toUpperCase() !== customerCode.toUpperCase()) return null;
+    return pending.reward === 'discount50' || pending.reward === 'freeHaircut' ? pending.reward : null;
+  } catch { return null; }
+}
+
+export function setPendingMembershipReward(merchantId: string, customerCode: string, reward: MembershipRewardType): void {
+  const id = requireMerchantId(merchantId);
+  localStorage.setItem(`yupos_${id}_pending_membership_reward`, JSON.stringify({ customerCode, reward, createdAt: Date.now() }));
+}
+
+function clearPendingReward(merchantId: string): void {
+  try { localStorage.removeItem(`yupos_${merchantId}_pending_membership_reward`); } catch {}
+}
+
+export function recordCustomerVisit(
+  customers: Customer[],
+  customerData: { name: string; phone: string; customerCode?: string; isMember?: boolean },
+  transactionAmount: number = 0,
+  merchantId: string = '',
+  visitMeta: CustomerVisitMeta = {}
+): Customer[] {
+  if (transactionAmount <= 0 || !String(merchantId || '').trim()) return customers;
+  const code = customerData.customerCode || generateCustomerCode(customerData.name, customerData.phone);
+  const existingIdx = customers.findIndex((c) => c.customerCode.toUpperCase() === code.toUpperCase() || c.phone === customerData.phone);
+  const now = new Date();
+  const todayStr = visitMeta.date || now.toISOString().split('T')[0];
+  const timeStr = visitMeta.time || now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  const visit: MembershipVisit = {
+    id: `VIS-${Date.now().toString(36).toUpperCase()}`,
+    date: todayStr,
+    time: timeStr,
+    amount: transactionAmount,
+    orderId: visitMeta.orderId,
+    services: visitMeta.services || [],
+    staff: visitMeta.staff || [],
+  };
+
+  let updatedList: Customer[];
+  if (existingIdx > -1) {
+    const existing = customers[existingIdx];
+    const shouldBeMember = customerData.isMember !== undefined ? (customerData.isMember || existing.isMember) : existing.isMember;
+    const pendingReward = shouldBeMember ? readPendingReward(merchantId, code) : null;
+    const nextVisitCount = pendingReward ? 1 : (existing.visitCount || 0) + 1;
+    const nextRedemptions = pendingReward
+      ? [...(existing.membershipRedemptions || []), { id: `REWARD-${Date.now().toString(36).toUpperCase()}`, type: pendingReward, date: todayStr, visitCount: existing.visitCount || 0 }]
+      : (existing.membershipRedemptions || []);
+
+    updatedList = [...customers];
+    updatedList[existingIdx] = {
+      ...existing,
+      name: customerData.name.trim() || existing.name,
+      phone: customerData.phone.trim() || existing.phone,
+      customerCode: code,
+      visitCount: nextVisitCount,
+      isMember: shouldBeMember,
+      memberSince: shouldBeMember && !existing.isMember ? todayStr : existing.memberSince,
+      totalSpent: (existing.totalSpent || 0) + transactionAmount,
+      lastVisit: todayStr,
+      // Permanent ledger: never cleared by membership rewards.
+      visitHistory: [...(existing.visitHistory || existing.membershipVisits || []), visit],
+      // Membership card cycle: cleared only when a reward is actually consumed by this completed transaction.
+      membershipVisits: shouldBeMember
+        ? (pendingReward ? [visit] : [...(existing.membershipVisits || []), visit])
+        : (existing.membershipVisits || []),
+      membershipRedemptions: nextRedemptions,
+    };
+    if (pendingReward) clearPendingReward(merchantId);
+  } else {
+    const isMember = !!customerData.isMember;
+    updatedList = [{
+      id: 'CUST-' + Date.now().toString(36).toUpperCase(),
+      name: customerData.name.trim(), phone: customerData.phone.trim(), customerCode: code,
+      visitCount: 1, isMember, memberSince: isMember ? todayStr : undefined,
+      totalSpent: transactionAmount, lastVisit: todayStr, createdAt: Date.now(),
+      visitHistory: [visit], membershipVisits: isMember ? [visit] : [], membershipRedemptions: [],
+    }, ...customers];
+  }
+  saveCustomers(merchantId, updatedList);
+  void syncCustomersToFirebase(merchantId, updatedList);
+  return updatedList;
+}
+
+/** Card redemption resets only the membership cycle. The permanent customer visit ledger remains untouched. */
 export function claimMembershipReward(customers: Customer[], customerId: string, reward: MembershipRewardType, merchantId: string): { customers: Customer[]; success: boolean; message: string } {
   try { requireMerchantId(merchantId); } catch { return { customers, success: false, message: 'Merchant tidak terautentikasi.' }; }
-  const index = customers.findIndex((c) => c.id === customerId); if (index < 0) return { customers, success: false, message: 'Customer tidak ditemukan.' }; const customer = customers[index]; const visits = customer.visitCount || 0; if (!customer.isMember) return { customers, success: false, message: 'Customer belum terdaftar sebagai member.' }; if (reward === 'discount50' && visits < 5) return { customers, success: false, message: 'Diskon 50% baru dapat diklaim setelah 5 kunjungan.' }; if (reward === 'freeHaircut' && visits < 10) return { customers, success: false, message: 'Cukur gratis baru dapat diklaim setelah 10 kunjungan.' };
-  const updatedCustomer: Customer = { ...customer, visitCount: 0, membershipVisits: [], membershipRedemptions: [...(customer.membershipRedemptions || []), { id: `REWARD-${Date.now().toString(36).toUpperCase()}`, type: reward, date: new Date().toISOString().split('T')[0], visitCount: visits }] }; const updated = [...customers]; updated[index] = updatedCustomer; saveCustomers(merchantId, updated); void syncCustomersToFirebase(merchantId, updated); return { customers: updated, success: true, message: reward === 'discount50' ? 'Diskon 50% berhasil diklaim. Stempel membership kembali ke 0.' : 'Cukur gratis berhasil diklaim. Stempel membership kembali ke 0.' };
+  const index = customers.findIndex((c) => c.id === customerId);
+  if (index < 0) return { customers, success: false, message: 'Customer tidak ditemukan.' };
+  const customer = customers[index];
+  const visits = customer.visitCount || 0;
+  if (!customer.isMember) return { customers, success: false, message: 'Customer belum terdaftar sebagai member.' };
+  if (reward === 'discount50' && visits < 5) return { customers, success: false, message: 'Diskon 50% baru dapat diklaim setelah 5 kunjungan.' };
+  if (reward === 'freeHaircut' && visits < 10) return { customers, success: false, message: 'Cukur gratis baru dapat diklaim setelah 10 kunjungan.' };
+
+  const updatedCustomer: Customer = {
+    ...customer,
+    visitCount: 0,
+    membershipVisits: [],
+    // DO NOT clear visitHistory.
+    visitHistory: [...(customer.visitHistory || customer.membershipVisits || [])],
+    membershipRedemptions: [...(customer.membershipRedemptions || []), {
+      id: `REWARD-${Date.now().toString(36).toUpperCase()}`, type: reward,
+      date: new Date().toISOString().split('T')[0], visitCount: visits,
+    }],
+  };
+  const updated = [...customers]; updated[index] = updatedCustomer;
+  saveCustomers(merchantId, updated); void syncCustomersToFirebase(merchantId, updated);
+  return { customers: updated, success: true, message: reward === 'discount50' ? 'Diskon 50% berhasil diklaim. Siklus membership direset, riwayat customer tetap tersimpan.' : 'Cukur gratis berhasil diklaim. Siklus membership direset, riwayat customer tetap tersimpan.' };
 }
