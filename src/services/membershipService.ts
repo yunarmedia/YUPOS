@@ -72,9 +72,9 @@ export function buildMembershipSnapshot(customer: Customer): MembershipSnapshot 
 }
 
 /**
- * Compact payload used inside the printed QR. It includes the member identity,
- * current reward state, creation date, latest visit and latest purchased/
- * booked items while remaining small enough for reliable thermal QR printing.
+ * Compact payload used by printed/on-screen membership QR.
+ * Keep it small enough for reliable thermal printing while carrying the
+ * information needed by a phone to render the member verification card.
  */
 export function buildMembershipQrSnapshot(customer: Customer) {
   const visits = deriveVisitDetails(customer);
@@ -92,16 +92,27 @@ export function buildMembershipQrSnapshot(customer: Customer) {
       })()
     : [];
 
+  const recentVisits = visits.slice(-5).reverse().map((visit) => ({
+    d: normalizeText(visit.date),
+    t: normalizeText(visit.time),
+    a: Math.round(visit.amount || 0),
+    s: normalizeText(visit.services.join(', ') || 'Layanan barbershop').slice(0, 100),
+    f: normalizeText(visit.staff.join(', ')).slice(0, 80),
+  }));
+
   return {
     a: 'Y',
-    v: 3,
+    v: 4,
     c: normalizeText(customer.customerCode),
     n: normalizeText(customer.name),
+    p: normalizeText(customer.phone || ''),
     i: customer.visitCount || 0,
     r: getMembershipReward(customer),
     ms: normalizeText(customer.memberSince || formatCreatedAt(customer.createdAt) || '-'),
+    ts: Math.round(customer.totalSpent || 0),
     lv: normalizeText(customer.lastVisit || (latest ? `${latest.date} ${latest.time}`.trim() : '-')),
     li: latestOrderItems.map(normalizeText).join(' | ').slice(0, 180),
+    vh: recentVisits,
   } as const;
 }
 
