@@ -62,7 +62,7 @@ export interface Order {
   ppnRate?: number;
   total: number;
   status: OrderStatus;
-  payment: string; // 'Cash' | 'QRIS' | 'Bank Transfer' | 'Shopeefood' | 'Gofood' | 'Grabfood' | etc.
+  payment: string; // 'Cash' | 'QRIS' | 'Bank Transfer' | 'Shopeefood' | 'Gofood' | 'Grabfood' | custom method, etc.
   shift: string; // '1' | '2' | 'Online Web'
   cashierName: string;
   businessType?: BusinessType;
@@ -130,6 +130,7 @@ export interface StoreSettings {
   categories: string[];
   staffRoles: string[];
   staffList: Record<string, string[]>; // role -> list of names
+  customPaymentMethods?: string[];
 }
 
 export interface MerchantUser {
