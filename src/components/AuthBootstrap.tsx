@@ -1,39 +1,43 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { MerchantUser } from '../types';
 import { getLicenseMessage, getMerchantProfile, isMerchantLicenseActive } from '../services/merchantService';
 
 interface AuthBootstrapProps { children: React.ReactNode; }
-
 type GateState = 'checking' | 'ready' | 'blocked';
 
 export const AuthBootstrap: React.FC<AuthBootstrapProps> = ({ children }) => {
   const [state, setState] = useState<GateState>('checking');
   const [blockedMessage, setBlockedMessage] = useState('');
   const [blockedEmail, setBlockedEmail] = useState<string | null>(null);
+  const initialCheckDone = useRef(false);
 
   useEffect(() => {
     let active = true;
     let interval: number | null = null;
 
-    const clearSession = () => {
-      localStorage.removeItem('yupos_merchant_session');
-    };
+    const clearSession = () => localStorage.removeItem('yupos_merchant_session');
 
     const evaluateUser = async (user: typeof auth.currentUser) => {
       if (!active) return;
+
+      // Only the initial bootstrap may show the full-screen checking state.
+      // Periodic license checks must never unmount App, otherwise activeTab
+      // falls back to the default POS/dashboard view.
+      if (!initialCheckDone.current) setState('checking');
+
       if (!user) {
         if (interval !== null) window.clearInterval(interval);
         interval = null;
         clearSession();
         setBlockedMessage('');
         setBlockedEmail(null);
+        initialCheckDone.current = true;
         setState('ready');
         return;
       }
 
-      setState('checking');
       setBlockedEmail(user.email);
 
       try {
@@ -43,6 +47,7 @@ export const AuthBootstrap: React.FC<AuthBootstrapProps> = ({ children }) => {
         if (!isMerchantLicenseActive(profile)) {
           clearSession();
           setBlockedMessage(getLicenseMessage(profile));
+          initialCheckDone.current = true;
           setState('blocked');
           return;
         }
@@ -54,12 +59,20 @@ export const AuthBootstrap: React.FC<AuthBootstrapProps> = ({ children }) => {
         };
         localStorage.setItem('yupos_merchant_session', JSON.stringify(merchant));
         setBlockedMessage('');
+        setBlockedEmail(null);
+        initialCheckDone.current = true;
         setState('ready');
       } catch (error) {
         console.warn('Merchant license verification failed:', error);
         if (!active) return;
+
+        // A transient Firebase/network failure during a periodic check must
+        // not kick an already authenticated user out of the running app.
+        if (initialCheckDone.current) return;
+
         clearSession();
         setBlockedMessage('Gagal memverifikasi status merchant. Periksa koneksi internet lalu coba lagi.');
+        initialCheckDone.current = true;
         setState('blocked');
       }
     };
@@ -85,11 +98,7 @@ export const AuthBootstrap: React.FC<AuthBootstrapProps> = ({ children }) => {
 
   const handleBlockedLogout = async () => {
     clearBlockedSession();
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.warn('Logout error:', error);
-    }
+    try { await signOut(auth); } catch (error) { console.warn('Logout error:', error); }
   };
 
   const clearBlockedSession = () => {
