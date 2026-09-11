@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { AuthBootstrap } from './components/AuthBootstrap';
 import { UpdateNotice } from './components/UpdateNotice';
+import './customPaymentEnhancer';
 import './index.css';
 
 function installYuposConfirmBridge() {
