@@ -1,8 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { onAuthStateChanged } from 'firebase/auth';
 import App from './App.tsx';
 import { AuthBootstrap } from './components/AuthBootstrap';
 import { UpdateNotice } from './components/UpdateNotice';
+import { auth } from './config/firebase';
+import { hydrateMerchantDataFromFirebase } from './services/merchantCloudHydration';
 import './customPaymentEnhancer';
 import './index.css';
 import './premium-ui.css';
@@ -115,12 +118,21 @@ function installYuposConfirmBridge() {
     const isDeleteAction = Boolean(button.querySelector('svg.lucide-trash-2')); if (!isDeleteAction) return;
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     const row = button.closest('tr'); const name = row?.querySelector('td:first-child span.font-bold')?.textContent?.trim();
-    open(name ? `Hapus \"${name}\" dari katalog produk?` : 'Hapus item ini dari katalog produk?', button);
+    open(name ? `Hapus "${name}" dari katalog produk?` : 'Hapus item ini dari katalog produk?', button);
   }, true);
   const nativeConfirm = window.confirm.bind(window);
   window.confirm = (message?: string) => bypassNextConfirm ? true : nativeConfirm(message);
 }
 installYuposConfirmBridge();
+
+// Restore the authenticated merchant's cloud state before the app needs it on a new device.
+// If the current browser already has a cache, hydration still refreshes it from the account cloud copy.
+onAuthStateChanged(auth, (user) => {
+  if (!user?.uid) return;
+  void hydrateMerchantDataFromFirebase(user.uid).then((hydrated) => {
+    if (hydrated) window.dispatchEvent(new CustomEvent('yupos-cloud-hydrated', { detail: { uid: user.uid } }));
+  });
+});
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('YUPOS root element (#root) was not found.');
