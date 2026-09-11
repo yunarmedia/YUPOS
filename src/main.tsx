@@ -6,12 +6,50 @@ import { UpdateNotice } from './components/UpdateNotice';
 import './customPaymentEnhancer';
 import './index.css';
 
+function readPortalPins(): Record<string, string> {
+  try {
+    const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null');
+    const uid = String(session?.uid || '').trim();
+    if (!uid) return {};
+    const settings = JSON.parse(localStorage.getItem(`yupos_${uid}_settings`) || 'null');
+    return settings?.portalPins || {};
+  } catch {
+    return {};
+  }
+}
+
+function getSensitiveActionPin(button: HTMLButtonElement): { pin: string; title: string } | null {
+  const text = (button.textContent || '').trim().toLowerCase();
+  const title = (button.getAttribute('title') || '').toLowerCase();
+  const body = document.body.innerText.toLowerCase();
+  const pins = readPortalPins();
+  const isHistory = body.includes('riwayat transaksi');
+  const isInventory = body.includes('manajemen produk') || body.includes('produk & layanan');
+  const isCustomer = body.includes('data pelanggan') || body.includes('data customer');
+  const isExpense = body.includes('pengeluaran');
+  const isEdit = title.includes('edit') || text.includes('edit') || Boolean(button.querySelector('svg.lucide-edit-3'));
+  const isDelete = title.includes('hapus') || text.includes('hapus') || Boolean(button.querySelector('svg.lucide-trash-2'));
+  const isCancel = title.includes('batalkan') || text.includes('batalkan') || Boolean(button.querySelector('svg.lucide-circle-x'));
+
+  if (isHistory && isEdit) return pins.historyEditPin ? { pin: pins.historyEditPin, title: 'Otorisasi Edit Transaksi' } : null;
+  if (isHistory && isDelete) return pins.historyDeletePin ? { pin: pins.historyDeletePin, title: 'Otorisasi Hapus Transaksi' } : null;
+  if (isHistory && isCancel) return pins.historyCancelPin ? { pin: pins.historyCancelPin, title: 'Otorisasi Batalkan Transaksi' } : null;
+  if (isInventory && isEdit) return pins.productEditPin ? { pin: pins.productEditPin, title: 'Otorisasi Edit Produk / Jasa' } : null;
+  if (isInventory && isDelete) return pins.productDeletePin ? { pin: pins.productDeletePin, title: 'Otorisasi Hapus Produk / Jasa' } : null;
+  if (isCustomer && isEdit) return pins.customerEditPin ? { pin: pins.customerEditPin, title: 'Otorisasi Edit Customer' } : null;
+  if (isCustomer && isDelete) return pins.customerDeletePin ? { pin: pins.customerDeletePin, title: 'Otorisasi Hapus Customer' } : null;
+  if (isExpense && isEdit) return pins.expenseEditPin ? { pin: pins.expenseEditPin, title: 'Otorisasi Edit Pengeluaran' } : null;
+  if (isExpense && isDelete) return pins.expenseDeletePin ? { pin: pins.expenseDeletePin, title: 'Otorisasi Hapus Pengeluaran' } : null;
+  return null;
+}
+
 function installYuposConfirmBridge() {
   let bypassNextConfirm = false;
   let activeButton: HTMLButtonElement | null = null;
   let overlay: HTMLDivElement | null = null;
+  let pendingPinAction: (() => void) | null = null;
 
-  const close = () => { overlay?.remove(); overlay = null; activeButton = null; };
+  const close = () => { overlay?.remove(); overlay = null; activeButton = null; pendingPinAction = null; };
   const open = (message: string, button: HTMLButtonElement) => {
     close(); activeButton = button;
     overlay = document.createElement('div'); overlay.className = 'yupos-confirm-overlay';
@@ -22,9 +60,37 @@ function installYuposConfirmBridge() {
     overlay.querySelector('.yupos-confirm-danger')?.addEventListener('click', () => { const target = activeButton; close(); if (!target) return; bypassNextConfirm = true; target.click(); window.setTimeout(() => { bypassNextConfirm = false; }, 0); });
     document.body.appendChild(overlay);
   };
+
+  const openPin = (title: string, expectedPin: string, action: () => void) => {
+    close(); pendingPinAction = action;
+    overlay = document.createElement('div'); overlay.className = 'yupos-confirm-overlay';
+    overlay.innerHTML = `<div class="yupos-confirm-card" role="dialog" aria-modal="true"><div class="yupos-confirm-icon"><span>🔐</span></div><div class="yupos-confirm-eyebrow">YUPOS • OTORITAS ADMIN</div><h2 class="yupos-confirm-title"></h2><p class="yupos-confirm-message">Masukkan PIN / Sandi untuk melanjutkan.</p><input class="yupos-authority-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Masukkan PIN"><p class="yupos-authority-error" style="min-height:18px;color:#dc2626;font-size:11px;font-weight:800;margin:6px 0 0"></p><div class="yupos-confirm-actions"><button type="button" class="yupos-confirm-cancel">Batal</button><button type="button" class="yupos-confirm-danger">Verifikasi</button></div></div>`;
+    const titleEl = overlay.querySelector('.yupos-confirm-title'); if (titleEl) titleEl.textContent = title;
+    const input = overlay.querySelector<HTMLInputElement>('.yupos-authority-pin');
+    const verify = () => {
+      if (input?.value === expectedPin) { const cb = pendingPinAction; pendingPinAction = null; close(); if (cb) { bypassNextConfirm = true; cb(); window.setTimeout(() => { bypassNextConfirm = false; }, 0); } }
+      else { const error = overlay?.querySelector('.yupos-authority-error'); if (error) error.textContent = 'PIN / Sandi salah.'; if (input) { input.value = ''; input.focus(); } }
+    };
+    overlay.querySelector('.yupos-confirm-danger')?.addEventListener('click', verify);
+    input?.addEventListener('keydown', (event) => { if (event.key === 'Enter') verify(); });
+    overlay.querySelector('.yupos-confirm-cancel')?.addEventListener('click', close);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) close(); });
+    document.body.appendChild(overlay); input?.focus();
+  };
+
   document.addEventListener('click', (event) => {
     if (bypassNextConfirm) return;
     const target = event.target as HTMLElement | null; const button = target?.closest('button') as HTMLButtonElement | null; if (!button) return;
+
+    // Mobile top shortcut to Printer must use the same authority as Sidebar.
+    if ((button.textContent || '').trim() === '🖨️') {
+      const pin = readPortalPins().printer || '';
+      if (pin) { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); openPin('Otorisasi Printer', pin, () => button.click()); return; }
+    }
+
+    const sensitive = getSensitiveActionPin(button);
+    if (sensitive) { event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); openPin(sensitive.title, sensitive.pin, () => button.click()); return; }
+
     const isDeleteAction = Boolean(button.querySelector('svg.lucide-trash-2')); if (!isDeleteAction) return;
     event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     const row = button.closest('tr'); const name = row?.querySelector('td:first-child span.font-bold')?.textContent?.trim();
