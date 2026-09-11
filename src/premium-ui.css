@@ -1,0 +1,110 @@
+/* YUPOS Premium UI Layer
+ * iOS-inspired typography, hierarchy, controls and tactile interactions.
+ * Loaded after the existing design system so it enhances without replacing
+ * component-specific layouts.
+ */
+
+:root {
+  --yupos-text: #111827;
+  --yupos-text-secondary: #667085;
+  --yupos-text-tertiary: #98a2b3;
+  --yupos-border-soft: rgba(15, 23, 42, 0.08);
+  --yupos-card-radius: 20px;
+  --yupos-control-radius: 14px;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  color: var(--yupos-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+}
+
+/* Make the default text hierarchy visibly stronger without making the UI bulky. */
+p { font-weight: 500; }
+label { font-weight: 700; }
+button { font-weight: 700; letter-spacing: -0.012em; }
+input, select, textarea { font-weight: 600; letter-spacing: -0.01em; }
+
+h1, h2, h3, h4, h5, h6 {
+  color: #0f172a;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+h1 { font-weight: 850; }
+h2 { font-weight: 850; }
+h3 { font-weight: 800; }
+h4, h5, h6 { font-weight: 750; }
+
+/* Premium card language: softer borders, larger radius, restrained shadow. */
+.bg-white.rounded-2xl,
+.bg-white.rounded-3xl,
+.bg-slate-50.rounded-2xl,
+.bg-slate-50.rounded-3xl {
+  border-color: var(--yupos-border-soft);
+}
+
+/* iOS-like controls: clean surfaces, strong focus state, tactile press. */
+input, select, textarea {
+  transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease, transform 120ms ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(37, 99, 235, 0.45) !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.10) !important;
+  outline: none;
+}
+
+button {
+  transition: transform 120ms ease, box-shadow 160ms ease, background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* Navigation and segmented controls feel closer to native iOS controls. */
+nav button {
+  min-height: 42px;
+  border-radius: 13px;
+}
+
+/* Avoid accidental text selection while operating the cashier UI. */
+button, nav, [role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Numeric/payment figures should read as strong financial information. */
+[class*="text-2xl"], [class*="text-3xl"], [class*="text-4xl"], [class*="text-5xl"] {
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+/* Mobile: slightly denser, stronger typography for cashier readability. */
+@media (max-width: 767px) {
+  body { font-size: 14px; }
+  button { font-weight: 750; }
+  input, select, textarea { font-size: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
