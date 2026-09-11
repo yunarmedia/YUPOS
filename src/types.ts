@@ -101,6 +101,9 @@ export interface Customer {
   lastVisit: string;
   notes?: string;
   createdAt?: number;
+  /** Permanent customer visit ledger. Never reset when a membership reward is redeemed. */
+  visitHistory?: MembershipVisit[];
+  /** Current membership reward cycle only. Reset after reward redemption. */
   membershipVisits?: MembershipVisit[];
   membershipRedemptions?: MembershipRedemption[];
 }
