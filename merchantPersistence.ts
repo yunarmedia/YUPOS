@@ -85,17 +85,21 @@ onAuthStateChanged(auth, async (user) => {
   const previousHydratedUid = localStorage.getItem(HYDRATION_FLAG);
   if (previousHydratedUid === merchantId) return;
 
+  const localSettingsBeforeHydration = safeRead<StoreSettings>(
+    `yupos_${merchantId}_settings`,
+    defaultSettings,
+  );
+  const hadCompleteLocalCache = hasLocalBusinessCache(merchantId, (localSettingsBeforeHydration.businessType || 'barbershop') as BusinessType);
+
   try {
     const cloudHasData = await hydrateMerchant(merchantId);
     localStorage.setItem(HYDRATION_FLAG, merchantId);
 
-    if (cloudHasData && !hasLocalBusinessCache(merchantId, (safeRead<StoreSettings>(`yupos_${merchantId}_settings`, defaultSettings).businessType || 'barbershop') as BusinessType)) {
-      // The cloud data was restored into an empty/new browser cache. Reload once so
+    if (cloudHasData && !hadCompleteLocalCache && !sessionStorage.getItem(RELOAD_FLAG)) {
+      // Cloud data was restored into an empty/new browser cache. Reload once so
       // App.tsx initializes its synchronous localStorage state from the restored data.
-      if (!sessionStorage.getItem(RELOAD_FLAG)) {
-        sessionStorage.setItem(RELOAD_FLAG, '1');
-        window.location.reload();
-      }
+      sessionStorage.setItem(RELOAD_FLAG, '1');
+      window.location.reload();
     } else {
       sessionStorage.removeItem(RELOAD_FLAG);
     }
