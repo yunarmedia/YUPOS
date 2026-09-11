@@ -79,11 +79,26 @@ export interface MembershipVisit {
   staff: string[];
 }
 
-export type MembershipRewardType = 'discount50' | 'freeHaircut';
+/** Universal membership reward configuration. */
+export type MembershipRewardType = 'percentage' | 'fixed' | 'freeItem' | 'custom';
+
+export interface MembershipReward {
+  id: string;
+  name: string;
+  type: MembershipRewardType;
+  requiredVisits: number;
+  value?: number;
+  itemId?: string;
+  itemName?: string;
+  description?: string;
+  active: boolean;
+}
 
 export interface MembershipRedemption {
   id: string;
-  type: MembershipRewardType;
+  rewardId?: string;
+  type: MembershipRewardType | string;
+  rewardName?: string;
   date: string;
   visitCount: number;
 }
@@ -101,9 +116,7 @@ export interface Customer {
   lastVisit: string;
   notes?: string;
   createdAt?: number;
-  /** Permanent customer visit ledger. Never reset when a membership reward is redeemed. */
   visitHistory?: MembershipVisit[];
-  /** Current membership reward cycle only. Reset after reward redemption. */
   membershipVisits?: MembershipVisit[];
   membershipRedemptions?: MembershipRedemption[];
 }
@@ -170,6 +183,7 @@ export interface StoreSettings {
   staffRoles: string[];
   staffList: Record<string, string[]>;
   customPaymentMethods?: string[];
+  membershipRewards?: MembershipReward[];
 }
 
 export interface MerchantUser {
