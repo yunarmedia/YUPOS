@@ -465,7 +465,7 @@ export default function App() {
   };
 
   // Save or complete an order
-  const handleSaveOrder = (
+  const handleSaveOrder = async (
     status: 'selesai' | 'pending',
     paymentMethod: string,
     customerNote: string,
@@ -518,9 +518,9 @@ export default function App() {
       };
 
       const updated = orders.map((o) => (o.id === editingOrder.id ? savedOrder : o));
-      setOrders(updated);
-      saveMerchantOrders(currentMId, currentBType, updated);
-      syncOrdersToFirebase(updated, currentMId, currentBType);
+      const persisted = await syncOrdersToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan transaksi ke cloud. Transaksi tidak diselesaikan.', 'error'); return; }
+    setOrders(updated);
     } else {
       const newId = 'ORD-' + Date.now().toString(36).toUpperCase();
       savedOrder = {
@@ -549,9 +549,9 @@ export default function App() {
       };
 
       const updated = [...orders, savedOrder];
-      setOrders(updated);
-      saveMerchantOrders(currentMId, currentBType, updated);
-      syncOrdersToFirebase(updated, currentMId, currentBType);
+      const persisted = await syncOrdersToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan transaksi ke cloud. Transaksi tidak diselesaikan.', 'error'); return; }
+    setOrders(updated);
     }
 
     // Record customer visit & persist to database
@@ -665,17 +665,17 @@ export default function App() {
   };
 
   // Product CRUD strictly scoped to active merchant & businessType
-  const handleSaveProduct = (prodData: Omit<ProductItem, 'id'>, id?: string) => {
+  const handleSaveProduct = async (prodData: Omit<ProductItem, 'id'>, id?: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
 
     if (id) {
       const updated = products.map((p) => (p.id === id ? { ...prodData, id, businessType: currentBType, merchantId: currentMId } : p));
-      setProducts(updated);
-      saveMerchantProducts(currentMId, currentBType, updated);
-      syncProductsToFirebase(updated, currentMId, currentBType);
-      showToast('Katalog berhasil diperbarui!', 'success');
+      const persisted = await syncProductsToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan katalog ke cloud. Data lokal tidak diubah.', 'error'); return; }
+    setProducts(updated);
+    showToast('Katalog berhasil diperbarui!', 'success');
     } else {
       const newProduct: ProductItem = {
         ...prodData,
@@ -684,26 +684,26 @@ export default function App() {
         merchantId: currentMId,
       };
       const updated = [...products, newProduct];
-      setProducts(updated);
-      saveMerchantProducts(currentMId, currentBType, updated);
-      syncProductsToFirebase(updated, currentMId, currentBType);
-      showToast('Katalog baru berhasil ditambahkan!', 'success');
+      const persisted = await syncProductsToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan katalog ke cloud. Data lokal tidak diubah.', 'error'); return; }
+    setProducts(updated);
+    showToast('Katalog baru berhasil ditambahkan!', 'success');
     }
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
     const updated = products.map((p) => (p.id === id ? { ...p, deleted: true } : p));
+    const persisted = await syncProductsToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan katalog ke cloud. Data lokal tidak diubah.', 'error'); return; }
     setProducts(updated);
-    saveMerchantProducts(currentMId, currentBType, updated);
-    syncProductsToFirebase(updated, currentMId, currentBType);
     showToast('Katalog berhasil dinonaktifkan.', 'info');
   };
 
   // Expense CRUD
-  const handleAddExpense = (expData: Omit<Expense, 'id'>) => {
+  const handleAddExpense = async (expData: Omit<Expense, 'id'>) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
@@ -715,50 +715,50 @@ export default function App() {
       merchantId: currentMId,
     };
     const updated = [...expenses, newExp];
+    const persisted = await syncExpensesToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan perubahan pengeluaran ke cloud.', 'error'); return; }
     setExpenses(updated);
-    saveMerchantExpenses(currentMId, currentBType, updated);
-    syncExpensesToFirebase(updated, currentMId, currentBType);
     showToast('Catatan pengeluaran berhasil disimpan.', 'success');
   };
 
-  const handleUpdateExpense = (exp: Expense) => {
+  const handleUpdateExpense = async (exp: Expense) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = expenses.map((e) => (String(e.id) === String(exp.id) ? exp : e));
+    const persisted = await syncExpensesToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan perubahan pengeluaran ke cloud.', 'error'); return; }
     setExpenses(updated);
-    saveMerchantExpenses(currentMId, currentBType, updated);
-    syncExpensesToFirebase(updated, currentMId, currentBType);
     showToast('Catatan pengeluaran diperbarui.', 'success');
   };
 
-  const handleDeleteExpense = (id: string | number) => {
+  const handleDeleteExpense = async (id: string | number) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = expenses.filter((e) => String(e.id) !== String(id));
+    const persisted = await syncExpensesToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan perubahan pengeluaran ke cloud.', 'error'); return; }
     setExpenses(updated);
-    saveMerchantExpenses(currentMId, currentBType, updated);
-    syncExpensesToFirebase(updated, currentMId, currentBType);
     showToast('Pengeluaran berhasil dihapus.', 'info');
   };
 
   // Petty Cash
-  const handleSavePettyCash = (amount: number) => {
+  const handleSavePettyCash = async (amount: number) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
 
+    const persisted = await syncPettyCashToFirebase(amount, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan modal awal kasir ke cloud.', 'error'); return; }
     setPettyCash(amount);
-    saveMerchantPettyCash(currentMId, currentBType, amount);
-    syncPettyCashToFirebase(amount, currentMId, currentBType);
     showToast('Modal awal kasir berhasil diperbarui!', 'success');
   };
 
   // Customer Management Handlers
-  const handleSaveCustomer = (customerData: Omit<Customer, 'id'>, id?: string) => {
+  const handleSaveCustomer = async (customerData: Omit<Customer, 'id'>, id?: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     let updated: Customer[];
@@ -778,22 +778,22 @@ export default function App() {
       showToast('Customer baru berhasil didaftarkan!', 'success');
     }
 
+    const persisted = await syncCustomersToFirebase(currentMId, updated);
+    if (!persisted) { showToast('Gagal menyimpan data customer ke cloud.', 'error'); return; }
     setCustomers(updated);
-    saveCustomers(currentMId, updated);
-    syncCustomersToFirebase(currentMId, updated);
-  };
+    };
 
-  const handleDeleteCustomer = (id: string) => {
+  const handleDeleteCustomer = async (id: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const updated = customers.filter((c) => c.id !== id);
+    const persisted = await syncCustomersToFirebase(currentMId, updated);
+    if (!persisted) { showToast('Gagal menyimpan data customer ke cloud.', 'error'); return; }
     setCustomers(updated);
-    saveCustomers(currentMId, updated);
-    syncCustomersToFirebase(currentMId, updated);
     showToast('Data customer berhasil dihapus.', 'info');
   };
 
-  const handleToggleMembership = (id: string) => {
+  const handleToggleMembership = async (id: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const updated = customers.map((c) => {
@@ -807,9 +807,9 @@ export default function App() {
       }
       return c;
     });
+    const persisted = await syncCustomersToFirebase(currentMId, updated);
+    if (!persisted) { showToast('Gagal menyimpan data customer ke cloud.', 'error'); return; }
     setCustomers(updated);
-    saveCustomers(currentMId, updated);
-    syncCustomersToFirebase(currentMId, updated);
     showToast('Status membership customer diperbarui!', 'success');
   };
 
@@ -821,27 +821,27 @@ export default function App() {
     showToast(`Memuat pesanan #${order.id} ke keranjang kasir.`, 'info');
   };
 
-  const handleCancelOrder = (orderId: string) => {
+  const handleCancelOrder = async (orderId: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = orders.map((o) => (o.id === orderId ? { ...o, status: 'batal' as const } : o));
+    const persisted = await syncOrdersToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan transaksi ke cloud. Transaksi tidak diselesaikan.', 'error'); return; }
     setOrders(updated);
-    saveMerchantOrders(currentMId, currentBType, updated);
-    syncOrdersToFirebase(updated, currentMId, currentBType);
     showToast('Status pesanan dibatalkan.', 'warning');
   };
 
-  const handleDeleteOrderPermanently = (orderId: string) => {
+  const handleDeleteOrderPermanently = async (orderId: string) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
     const currentBType = settings.businessType;
 
     const updated = orders.filter((o) => o.id !== orderId);
+    const persisted = await syncOrdersToFirebase(updated, currentMId, currentBType);
+    if (!persisted) { showToast('Gagal menyimpan transaksi ke cloud. Transaksi tidak diselesaikan.', 'error'); return; }
     setOrders(updated);
-    saveMerchantOrders(currentMId, currentBType, updated);
-    syncOrdersToFirebase(updated, currentMId, currentBType);
     showToast('Pesanan dihapus secara permanen.', 'info');
   };
 
@@ -1152,3 +1152,5 @@ export default function App() {
     </div>
   );
 }
+
+// STAGE4B_SOURCE_MIGRATED
