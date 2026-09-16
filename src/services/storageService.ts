@@ -34,6 +34,18 @@ function mergeSettings(saved: StoreSettings): StoreSettings {
   return { ...defaultSettings, ...saved, portalPins: { ...defaultSettings.portalPins, ...(saved.portalPins || {}) }, categories: Array.isArray(saved.categories) ? saved.categories : [], staffRoles: Array.isArray(saved.staffRoles) ? saved.staffRoles : [], staffList: saved.staffList && typeof saved.staffList === 'object' ? saved.staffList : {} };
 }
 
+const syncQueues = new Map<string, Promise<boolean>>();
+
+function enqueueSync(key: string, operation: () => Promise<boolean>): Promise<boolean> {
+  const previous = syncQueues.get(key) || Promise.resolve(true);
+  const next = previous.catch(() => false).then(operation);
+  syncQueues.set(key, next);
+  void next.finally(() => {
+    if (syncQueues.get(key) === next) syncQueues.delete(key);
+  });
+  return next;
+}
+
 export function getMerchantStorageKey(merchantId: string, businessType: BusinessType | string, dataType: 'products' | 'orders' | 'expenses' | 'pettyCash' | 'settings'): string {
   const id = String(merchantId || '').trim();
   if (!id || id === 'default' || id === 'merchant_default') throw new Error('Invalid merchant storage key.');
@@ -64,7 +76,7 @@ export async function hydrateMerchantDataFromFirebase(merchantId: string, busine
     if (expensesSnap.exists()) saveMerchantExpenses(id, resolvedBusinessType, (expensesSnap.data().list || []) as Expense[], true);
     if (pettyCashSnap.exists()) saveMerchantPettyCash(id, resolvedBusinessType, Number(pettyCashSnap.data().amount || 0), true);
     return Boolean(settingsSnap.exists() || productsSnap.exists() || ordersSnap.exists() || expensesSnap.exists() || pettyCashSnap.exists());
-  } catch (err) { console.warn('Firebase merchant hydration warning:', err); return false; }
+  } catch (err) { console.error('Firebase merchant hydration failed:', err); return false; }
 }
 
 function isLegacyDemoProduct(item: ProductItem): boolean { return /^(barber|salon|fnb|ret|ld|ws|cst)-/i.test(String(item.id || '').trim()); }
@@ -74,18 +86,50 @@ function orderFingerprint(order: Order): string { return JSON.stringify({ timest
 function dedupeOrders(orders: Order[]): Order[] { const seen = new Set<string>(); return orders.filter(order => { const fp = orderFingerprint(order); if (seen.has(fp)) return false; seen.add(fp); return true; }); }
 
 export function loadMerchantSettings(merchantId: string): StoreSettings { if (!merchantId) return { ...defaultSettings }; return mergeSettings(loadLocalData<StoreSettings>(getMerchantStorageKey(merchantId, 'default', 'settings'), defaultSettings)); }
-export function saveMerchantSettings(merchantId: string, settings: StoreSettings, persistToCache = false): void { if (!merchantId) return; if (persistToCache) { saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), mergeSettings(settings)); return; } void syncConfigToFirebase(settings, merchantId); }
-export function loadMerchantProducts(merchantId: string, businessType: BusinessType): ProductItem[] { if (!merchantId) return []; return loadLocalData<ProductItem[]>(getMerchantStorageKey(merchantId, businessType, 'products'), []).filter(item => !isLegacyDemoProduct(item)).map(item => ({ ...item, businessType, merchantId })); }
-export function saveMerchantProducts(merchantId: string, businessType: BusinessType, products: ProductItem[], persistToCache = false): void { if (!merchantId) return; if (persistToCache) { const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'products'), products.map(p => ({ ...p, merchantId: id, businessType }))); return; } void syncProductsToFirebase(products, merchantId, businessType); }
-export function loadMerchantOrders(merchantId: string, businessType: BusinessType): Order[] { if (!merchantId) return []; const parsed = loadLocalData<Order[]>(getMerchantStorageKey(merchantId, businessType, 'orders'), []); return normalizeOrderIds(dedupeOrders(parsed)).map(o => ({ ...o, merchantId, businessType })); }
-export function saveMerchantOrders(merchantId: string, businessType: BusinessType, orders: Order[], persistToCache = false): void { if (!merchantId) return; if (persistToCache) { const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'orders'), normalizeOrderIds(dedupeOrders(orders.map(o => ({ ...o, merchantId: id, businessType })) ))); return; } void syncOrdersToFirebase(orders, merchantId, businessType); }
-export function loadMerchantExpenses(merchantId: string, businessType: BusinessType): Expense[] { if (!merchantId) return []; return loadLocalData<Expense[]>(getMerchantStorageKey(merchantId, businessType, 'expenses'), []).map(e => ({ ...e, merchantId, businessType })); }
-export function saveMerchantExpenses(merchantId: string, businessType: BusinessType, expenses: Expense[], persistToCache = false): void { if (!merchantId) return; if (persistToCache) { const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'expenses'), expenses.map(e => ({ ...e, merchantId: id, businessType }))); return; } void syncExpensesToFirebase(expenses, merchantId, businessType); }
-export function loadMerchantPettyCash(merchantId: string, businessType: BusinessType): number { if (!merchantId) return 0; return loadLocalData<number>(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), 0); }
-export function saveMerchantPettyCash(merchantId: string, businessType: BusinessType, amount: number, persistToCache = false): void { if (!merchantId) return; if (persistToCache) { saveLocalData(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), Number(amount) || 0); return; } void syncPettyCashToFirebase(amount, merchantId, businessType); }
 
-export async function syncConfigToFirebase(settings: StoreSettings, merchantId: string = ''): Promise<boolean> { try { const id = requireMerchantId(merchantId); await setDoc(doc(db, 'yupos_config', id, 'settings', 'data'), sanitizeFirestoreData({ ...settings, merchantId: id }), { merge: true }); saveMerchantSettings(id, settings, true); return true; } catch (err) { console.error('Firebase config sync failed:', err); return false; } }
-export async function syncProductsToFirebase(products: ProductItem[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> { try { const id = requireMerchantId(merchantId); await setDoc(doc(db, 'yupos_catalog', id, businessType, 'products'), sanitizeFirestoreData({ items: products.map(p => ({ ...p, merchantId: id, businessType })), merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantProducts(id, businessType, products, true); return true; } catch (err) { console.error('Firebase products sync failed:', err); return false; } }
-export async function syncOrdersToFirebase(orders: Order[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> { try { const id = requireMerchantId(merchantId); const normalized = normalizeOrderIds(dedupeOrders(orders.map(o => ({ ...o, merchantId: id, businessType })))); await setDoc(doc(db, 'yupos_transactions', id, businessType, 'orders'), sanitizeFirestoreData({ list: normalized, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantOrders(id, businessType, normalized, true); return true; } catch (err) { console.error('Firebase orders sync failed:', err); return false; } }
-export async function syncExpensesToFirebase(expenses: Expense[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> { try { const id = requireMerchantId(merchantId); await setDoc(doc(db, 'yupos_finances', id, businessType, 'expenses'), sanitizeFirestoreData({ list: expenses.map(e => ({ ...e, merchantId: id, businessType })), merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantExpenses(id, businessType, expenses, true); return true; } catch (err) { console.error('Firebase expenses sync failed:', err); return false; } }
-export async function syncPettyCashToFirebase(amount: number, merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> { try { const id = requireMerchantId(merchantId); await setDoc(doc(db, 'yupos_finances', id, businessType, 'pettyCash'), sanitizeFirestoreData({ amount: Number(amount) || 0, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantPettyCash(id, businessType, amount, true); return true; } catch (err) { console.error('Firebase petty cash sync failed:', err); return false; } }
+// Save helpers are cache-only. Firestore writes are performed explicitly by sync* functions
+// so one user action results in one serialized cloud write rather than duplicate writes.
+export function saveMerchantSettings(merchantId: string, settings: StoreSettings, persistToCache = false): void { if (!merchantId) return; saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), mergeSettings(settings)); }
+export function loadMerchantProducts(merchantId: string, businessType: BusinessType): ProductItem[] { if (!merchantId) return []; return loadLocalData<ProductItem[]>(getMerchantStorageKey(merchantId, businessType, 'products'), []).filter(item => !isLegacyDemoProduct(item)).map(item => ({ ...item, businessType, merchantId })); }
+export function saveMerchantProducts(merchantId: string, businessType: BusinessType, products: ProductItem[], persistToCache = false): void { if (!merchantId) return; const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'products'), products.map(p => ({ ...p, merchantId: id, businessType }))); }
+export function loadMerchantOrders(merchantId: string, businessType: BusinessType): Order[] { if (!merchantId) return []; const parsed = loadLocalData<Order[]>(getMerchantStorageKey(merchantId, businessType, 'orders'), []); return normalizeOrderIds(dedupeOrders(parsed)).map(o => ({ ...o, merchantId, businessType })); }
+export function saveMerchantOrders(merchantId: string, businessType: BusinessType, orders: Order[], persistToCache = false): void { if (!merchantId) return; const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'orders'), normalizeOrderIds(dedupeOrders(orders.map(o => ({ ...o, merchantId: id, businessType })) ))); }
+export function loadMerchantExpenses(merchantId: string, businessType: BusinessType): Expense[] { if (!merchantId) return []; return loadLocalData<Expense[]>(getMerchantStorageKey(merchantId, businessType, 'expenses'), []).map(e => ({ ...e, merchantId, businessType })); }
+export function saveMerchantExpenses(merchantId: string, businessType: BusinessType, expenses: Expense[], persistToCache = false): void { if (!merchantId) return; const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'expenses'), expenses.map(e => ({ ...e, merchantId: id, businessType }))); }
+export function loadMerchantPettyCash(merchantId: string, businessType: BusinessType): number { if (!merchantId) return 0; return loadLocalData<number>(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), 0); }
+export function saveMerchantPettyCash(merchantId: string, businessType: BusinessType, amount: number, persistToCache = false): void { if (!merchantId) return; saveLocalData(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), Number(amount) || 0); }
+
+export function syncConfigToFirebase(settings: StoreSettings, merchantId: string = ''): Promise<boolean> {
+  return enqueueSync(`settings:${merchantId}`, async () => {
+    try { const id = requireMerchantId(merchantId); const clean = mergeSettings(sanitizeFirestoreData(settings)); await setDoc(doc(db, 'yupos_config', id, 'settings', 'data'), sanitizeFirestoreData({ ...clean, merchantId: id }), { merge: true }); saveMerchantSettings(id, clean, true); return true; }
+    catch (err) { console.error('Firebase config sync failed:', err); return false; }
+  });
+}
+
+export function syncProductsToFirebase(products: ProductItem[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  return enqueueSync(`products:${merchantId}:${businessType}`, async () => {
+    try { const id = requireMerchantId(merchantId); const clean = products.map(p => ({ ...p, merchantId: id, businessType })); await setDoc(doc(db, 'yupos_catalog', id, businessType, 'products'), sanitizeFirestoreData({ items: clean, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantProducts(id, businessType, clean, true); return true; }
+    catch (err) { console.error('Firebase products sync failed:', err); return false; }
+  });
+}
+
+export function syncOrdersToFirebase(orders: Order[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  return enqueueSync(`orders:${merchantId}:${businessType}`, async () => {
+    try { const id = requireMerchantId(merchantId); const normalized = normalizeOrderIds(dedupeOrders(orders.map(o => ({ ...o, merchantId: id, businessType })))); await setDoc(doc(db, 'yupos_transactions', id, businessType, 'orders'), sanitizeFirestoreData({ list: normalized, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantOrders(id, businessType, normalized, true); return true; }
+    catch (err) { console.error('Firebase orders sync failed:', err); return false; }
+  });
+}
+
+export function syncExpensesToFirebase(expenses: Expense[], merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  return enqueueSync(`expenses:${merchantId}:${businessType}`, async () => {
+    try { const id = requireMerchantId(merchantId); const clean = expenses.map(e => ({ ...e, merchantId: id, businessType })); await setDoc(doc(db, 'yupos_finances', id, businessType, 'expenses'), sanitizeFirestoreData({ list: clean, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantExpenses(id, businessType, clean, true); return true; }
+    catch (err) { console.error('Firebase expenses sync failed:', err); return false; }
+  });
+}
+
+export function syncPettyCashToFirebase(amount: number, merchantId: string = '', businessType: BusinessType = 'barbershop'): Promise<boolean> {
+  return enqueueSync(`pettyCash:${merchantId}:${businessType}`, async () => {
+    try { const id = requireMerchantId(merchantId); const cleanAmount = Number(amount) || 0; await setDoc(doc(db, 'yupos_finances', id, businessType, 'pettyCash'), sanitizeFirestoreData({ amount: cleanAmount, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true }); saveMerchantPettyCash(id, businessType, cleanAmount, true); return true; }
+    catch (err) { console.error('Firebase petty cash sync failed:', err); return false; }
+  });
+}
