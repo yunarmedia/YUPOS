@@ -1,5 +1,7 @@
-import { auth } from '../../config/firebase';
+import { auth } from '../config/firebase';
+import { getDeviceId } from './deviceService';
 import type { LicenseValidationResult } from './types';
+import { APP_VERSION } from '../appVersion';
 
 const LICENSE_CACHE_KEY = 'yupos_license_cache';
 
@@ -20,16 +22,17 @@ const writeCache = (result: LicenseValidationResult): void => {
   }
 };
 
-/**
- * Reads the last server-validated license result from local cache.
- * This is intended for UI bootstrap only and is NOT an authorization boundary.
- */
 export const getCachedLicense = (): LicenseValidationResult | null => readCache();
 
+const resolveFunctionUrl = (): string => {
+  const projectId = 'yuposcashier';
+  return `https://asia-southeast1-${projectId}.cloudfunctions.net/validateLicense`;
+};
+
 /**
- * Calls the future server-side license endpoint.
- * The endpoint is intentionally not enabled yet so existing YUPOS users are
- * not locked out while the licensing backend is being introduced.
+ * Performs a server-side license validation using the current Firebase ID token.
+ * The cached result is only a UX/bootstrap fallback and is never sufficient for
+ * Firestore authorization, which remains enforced by Firebase Security Rules.
  */
 export const validateLicense = async (): Promise<LicenseValidationResult> => {
   const user = auth.currentUser;
@@ -37,11 +40,31 @@ export const validateLicense = async (): Promise<LicenseValidationResult> => {
     return { valid: false, reason: 'missing' };
   }
 
-  // Phase 1 foundation: authentication is available, but the licensing API
-  // is not wired into production enforcement yet.
-  // Phase 2 will POST a Firebase ID token to /api/license/validate and cache
-  // only the server response here.
-  return readCache() ?? { valid: false, reason: 'missing' };
+  try {
+    const idToken = await user.getIdToken();
+    const response = await fetch(resolveFunctionUrl(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        deviceId: getDeviceId(),
+        appVersion: APP_VERSION,
+      }),
+    });
+
+    const result = (await response.json()) as LicenseValidationResult;
+    if (!response.ok && !result.reason) {
+      return { valid: false, reason: 'invalid' };
+    }
+
+    writeCache(result);
+    return result;
+  } catch (error) {
+    console.warn('YUPOS license validation request failed:', error);
+    return readCache() ?? { valid: false, reason: 'invalid' };
+  }
 };
 
 export const clearLicenseCache = (): void => {

@@ -1,0 +1,15 @@
+{
+  "latestVersion": "2.3.8",
+  "releases": [
+    {
+      "version": "2.3.8",
+      "date": "2026-09-16",
+      "title": "YUPOS 2.3.8",
+      "summary": "Versi stabil YUPOS saat ini.",
+      "changes": [
+        "Penyempurnaan stabilitas aplikasi dan sinkronisasi data.",
+        "Penyempurnaan pengalaman penggunaan PWA di perangkat mobile dan desktop."
+      ]
+    }
+  ]
+}

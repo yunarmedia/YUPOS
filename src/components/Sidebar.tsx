@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { ReceiptText, History, UsersRound, WalletCards, ChartNoAxesCombined, Database, BriefcaseBusiness, Printer, Settings2, ShieldCheck, LogOut, Briefcase, Scissors, Sparkles, Utensils, Shirt, Wrench, ChevronRight, X, Lock, Eye, EyeOff, Package } from 'lucide-react';
+import { ReceiptText, History, UsersRound, WalletCards, ChartNoAxesCombined, Database, BriefcaseBusiness, Printer, Settings2, ShieldCheck, LogOut, Briefcase, Scissors, Sparkles, Utensils, Shirt, Wrench, ChevronRight, X, Lock, Eye, EyeOff, Package, CircleHelp } from 'lucide-react';
 import { StoreSettings, MerchantUser, BusinessType, PortalPins } from '../types';
 import { BUSINESS_PRESETS } from '../config/businessCategories';
 import { syncConfigToFirebase } from '../services/storageService';
 import { YuposLogo } from './YuposLogo';
 import { AdminModal } from './AdminModal';
+import { UpdateCenterView } from './UpdateCenterView';
 
 interface SidebarProps { activeTab: string; onSelectTab: (tabId: string) => void; settings: StoreSettings; merchant: MerchantUser | null; onLogout: () => void; isOpen?: boolean; onClose?: () => void; }
 const PROTECTED_TABS: Record<string, keyof PortalPins> = { pos: 'pos', customers: 'customers', revenue: 'revenue', extract: 'extract', expenses: 'expenses', inventory: 'inventory', history: 'history', staff: 'staff', printer: 'printer', settings: 'settings' };
@@ -13,6 +14,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
   const activeShiftName = settings.activeShift === '1' ? settings.shift1Name : settings.shift2Name;
   const currentPreset = BUSINESS_PRESETS[settings.businessType] || BUSINESS_PRESETS.barbershop;
   const [showAdmin, setShowAdmin] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [pinModal, setPinModal] = useState<{ title: string; expected: string; action: () => void } | null>(null);
   const [enteredPin, setEnteredPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -29,9 +31,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
     { id: 'staff', label: 'KARYAWAN & SHIFT', icon: BriefcaseBusiness },
     { id: 'printer', label: 'PRINTER', icon: Printer },
     { id: 'settings', label: 'PENGATURAN', icon: Settings2 },
+    { id: 'help', label: 'PUSAT BANTUAN', icon: CircleHelp },
   ];
   const openPin = (title: string, expected: string, action: () => void) => { if (!expected) { action(); return; } setEnteredPin(''); setPinError(''); setShowPin(false); setPinModal({ title, expected, action }); };
-  const handleItemClick = (id: string) => { if (id === 'admin') { openPin('Otoritas Admin Kontrol', settings.portalPins?.admin || '', () => setShowAdmin(true)); return; } onSelectTab(id); };
+  const handleItemClick = (id: string) => { if (id === 'admin') { openPin('Otoritas Admin Kontrol', settings.portalPins?.admin || '', () => setShowAdmin(true)); return; } if (id === 'help') { setShowHelp(true); onClose?.(); return; } onSelectTab(id); };
   const verifyPin = (e: React.FormEvent) => { e.preventDefault(); if (!pinModal) return; if (enteredPin === pinModal.expected) { const action = pinModal.action; setPinModal(null); setEnteredPin(''); setPinError(''); action(); } else setPinError('PIN / Sandi salah.'); };
   const handleAdminPinsUpdate = (pins: PortalPins) => { const uid = merchant?.uid || 'default_merchant'; let customPaymentMethods = settings.customPaymentMethods || []; try { customPaymentMethods = JSON.parse(localStorage.getItem(`yupos_${uid}_custom_payment_methods`) || 'null') || customPaymentMethods; } catch {} const nextSettings: StoreSettings = { ...settings, portalPins: pins, customPaymentMethods }; localStorage.setItem(`yupos_${uid}_settings`, JSON.stringify(nextSettings)); localStorage.setItem('yupos_settings', JSON.stringify(nextSettings)); void syncConfigToFirebase(nextSettings, uid).catch((error) => console.warn('Admin authority sync failed:', error)); window.dispatchEvent(new CustomEvent('yupos-admin-settings-updated')); setShowAdmin(false); };
   return <>
@@ -43,6 +46,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab, settin
       <div className="mt-auto border-t border-slate-800 bg-slate-950/80 p-3"><div className="mb-2 flex items-center justify-between"><div className="min-w-0 pr-2"><p className="truncate text-[10px] font-semibold text-slate-400">{merchant?.email || 'Merchant Kasir'}</p><p className="flex items-center gap-1 text-[9px] font-bold text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Sistem Aktif & Siap</p></div><button onClick={onLogout} title="Keluar / Ganti Akun" className="rounded-lg bg-slate-800 p-2 text-slate-300 transition-colors hover:bg-red-900/50 hover:text-red-400"><LogOut className="h-4 w-4" /></button></div></div>
     </aside>
     {showAdmin && <div className="fixed inset-0 z-[80] bg-slate-50"><AdminModal settings={settings} onUpdatePins={handleAdminPinsUpdate} onShowToast={() => undefined} /></div>}
+    {showHelp && <div className="fixed inset-0 z-[90] bg-slate-50"><div className="flex h-full flex-col"><div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-600">YUPOS Help Center</p><h2 className="text-sm font-black text-slate-900">Pusat Bantuan</h2></div><button type="button" onClick={() => setShowHelp(false)} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900" title="Tutup Pusat Bantuan"><X className="h-5 w-5" /></button></div><div className="min-h-0 flex-1"><UpdateCenterView /></div></div></div>}
     {pinModal && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"><div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700"><Lock className="h-5 w-5" /></div><div><h3 className="text-sm font-extrabold text-slate-900">{pinModal.title}</h3><p className="text-[11px] font-medium text-slate-500">Masukkan PIN / Sandi untuk melanjutkan</p></div></div><form onSubmit={verifyPin} className="space-y-4"><div className="relative"><input type={showPin ? 'text' : 'password'} autoFocus value={enteredPin} onChange={(e) => { setEnteredPin(e.target.value); setPinError(''); }} placeholder="Masukkan PIN..." className="w-full rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 pr-10 text-sm font-bold tracking-wider text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" /><button type="button" onClick={() => setShowPin((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}</button></div>{pinError && <p className="text-[11px] font-bold text-red-600">{pinError}</p>}<div className="flex justify-end gap-2"><button type="button" onClick={() => setPinModal(null)} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button><button type="submit" className="rounded-xl bg-amber-500 px-4 py-2 text-xs font-black text-slate-950">Buka Akses</button></div></form></div></div>}
   </>;
 };
