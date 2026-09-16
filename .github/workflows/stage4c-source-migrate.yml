@@ -1,0 +1,87 @@
+name: Stage 4C Source Migration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.actor == 'yunarmedia' || github.actor == 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Patch source
+        run: node <<'NODE'
+const fs = require('fs');
+
+function replaceOnce(file, from, to, label) {
+  const s = fs.readFileSync(file, 'utf8');
+  if (!s.includes(from)) throw new Error(`Stage 4C pattern not found: ${label}`);
+  fs.writeFileSync(file, s.replace(from, to));
+}
+
+const app = 'src/App.tsx';
+
+replaceOnce(app,
+`  // Customizable Auto-shift scheduler (consumes custom hours shift1Start/End & shift2Start/End)\n  useEffect(() => {\n    const checkShift = () => {\n      if (settings.manualOverride) return;\n\n      const now = new Date();\n      const curTime = \`${'${String(now.getHours()).padStart(2, \'0\')}:${String(now.getMinutes()).padStart(2, \'0\')}' }\`;\n      const s1Start = settings.shift1Start || '10:00';\n      const s1End = settings.shift1End || '13:00';\n\n      const inShift1 = isTimeWithinRange(curTime, s1Start, s1End);\n      const expectedShift: '1' | '2' = inShift1 ? '1' : '2';\n\n      if (settings.activeShift !== expectedShift) {\n        const mId = merchant?.uid?.trim();\n        if (!mId) return;\n\n        setSettings((prev) => {\n          const updated = { ...prev, activeShift: expectedShift };\n          saveMerchantSettings(mId, updated);\n          syncConfigToFirebase(updated, mId);\n          return updated;\n        });\n      }\n    };`,
+`  // Customizable Auto-shift scheduler (consumes custom hours shift1Start/End & shift2Start/End)\n  const autoShiftSyncRef = useRef(false);\n\n  useEffect(() => {\n    const checkShift = async () => {\n      if (settings.manualOverride || autoShiftSyncRef.current) return;\n\n      const now = new Date();\n      const curTime = \`${'${String(now.getHours()).padStart(2, \'0\')}:${String(now.getMinutes()).padStart(2, \'0\')}' }\`;\n      const s1Start = settings.shift1Start || '10:00';\n      const s1End = settings.shift1End || '13:00';\n\n      const inShift1 = isTimeWithinRange(curTime, s1Start, s1End);\n      const expectedShift: '1' | '2' = inShift1 ? '1' : '2';\n\n      if (settings.activeShift !== expectedShift) {\n        const mId = merchant?.uid?.trim();\n        if (!mId) return;\n\n        const updated = { ...settings, activeShift: expectedShift };\n        autoShiftSyncRef.current = true;\n        try {\n          const persisted = await syncConfigToFirebase(updated, mId);\n          if (!persisted) {\n            showToast('Gagal menyimpan perubahan shift ke cloud.', 'error');\n            return;\n          }\n          setSettings(updated);\n        } finally {\n          autoShiftSyncRef.current = false;\n        }\n      }\n    };`,
+'auto-shift handler');
+
+replaceOnce(app,
+`  const handleUpdateSettings = (newSettings: Partial<StoreSettings>) => {\n    const currentMId = requireMerchantId();\n    if (!currentMId) return;\n\n    setSettings((prev) => {\n      const updated = { ...prev, ...newSettings };\n      saveMerchantSettings(currentMId, updated);\n      syncConfigToFirebase(updated, currentMId);\n\n      // When businessType changes: isolate data strictly!\n      // Save current items for old businessType, load items for new businessType\n      if (newSettings.businessType && newSettings.businessType !== prev.businessType) {\n        const oldType = prev.businessType;\n        const newType = newSettings.businessType;\n\n        // Save current items under old businessType\n        saveMerchantProducts(currentMId, oldType, products);\n        saveMerchantOrders(currentMId, oldType, orders);\n        saveMerchantExpenses(currentMId, oldType, expenses);\n        saveMerchantPettyCash(currentMId, oldType, pettyCash);\n\n        // Load isolated items for new businessType\n        const switchedProducts = loadMerchantProducts(currentMId, newType);\n        const switchedOrders = loadMerchantOrders(currentMId, newType);\n        const switchedExpenses = loadMerchantExpenses(currentMId, newType);\n        const switchedPetty = loadMerchantPettyCash(currentMId, newType);\n\n        setProducts(switchedProducts);\n        setOrders(switchedOrders);\n        setExpenses(switchedExpenses);\n        setPettyCash(switchedPetty);\n\n        // Clear active cart to avoid cross-business mismatched items\n        setCart([]);\n        setEditingOrder(null);\n      }\n\n      return updated;\n    });\n  };`,
+`  const handleUpdateSettings = async (newSettings: Partial<StoreSettings>) => {\n    const currentMId = requireMerchantId();\n    if (!currentMId) return;\n\n    const previous = settings;\n    const updated = { ...previous, ...newSettings };\n    const persisted = await syncConfigToFirebase(updated, currentMId);\n    if (!persisted) {\n      showToast('Gagal menyimpan pengaturan ke cloud. Perubahan tidak diterapkan.', 'error');\n      return;\n    }\n\n    setSettings(updated);\n\n    // When businessType changes: isolate data strictly!\n    if (newSettings.businessType && newSettings.businessType !== previous.businessType) {\n      const newType = newSettings.businessType;\n\n      // Existing catalog/transactions remain authoritative in Firestore under their old businessType.\n      // Load only the target businessType after the settings write succeeds.\n      const switchedProducts = loadMerchantProducts(currentMId, newType);\n      const switchedOrders = loadMerchantOrders(currentMId, newType);\n      const switchedExpenses = loadMerchantExpenses(currentMId, newType);\n      const switchedPetty = loadMerchantPettyCash(currentMId, newType);\n\n      setProducts(switchedProducts);\n      setOrders(switchedOrders);\n      setExpenses(switchedExpenses);\n      setPettyCash(switchedPetty);\n      setCart([]);\n      setEditingOrder(null);\n    }\n\n    showToast('Pengaturan berhasil disimpan.', 'success');\n  };`,
+'settings handler');
+
+replaceOnce(app,
+`      const updatedCustomers = recordCustomerVisit(\n        customers,\n        {\n          name: customerDetails.name,\n          phone: customerDetails.phone,\n          customerCode: customerDetails.customerCode,\n          isMember: customerDetails.isMember,\n        },\n        status === 'selesai' ? finalTotal : 0,\n        currentMId\n      );\n      setCustomers(updatedCustomers);`,
+`      const updatedCustomers = await recordCustomerVisit(\n        customers,\n        {\n          name: customerDetails.name,\n          phone: customerDetails.phone,\n          customerCode: customerDetails.customerCode,\n          isMember: customerDetails.isMember,\n        },\n        status === 'selesai' ? finalTotal : 0,\n        currentMId\n      );\n      if (updatedCustomers) {\n        setCustomers(updatedCustomers);\n      } else {\n        showToast('Transaksi tersimpan, tetapi riwayat customer gagal disimpan ke cloud.', 'warning');\n      }`,'customer visit await');
+
+replaceOnce(app, `// STAGE4B_SOURCE_MIGRATED`, `// STAGE4B_SOURCE_MIGRATED\n// STAGE4C_SOURCE_MIGRATED`, 'stage marker');
+
+const customer = 'src/services/customerService.ts';
+let c = fs.readFileSync(customer, 'utf8');
+const oldVisit = c.match(/export function recordCustomerVisit\([\s\S]*?\nexport function claimMembershipReward/);
+if (!oldVisit) throw new Error('recordCustomerVisit function not found');
+const visitPrefix = oldVisit[0].slice(0, -`export function claimMembershipReward`.length);
+const newVisit = visitPrefix.replace('export function recordCustomerVisit(', 'export async function recordCustomerVisit(').replace('void syncCustomersToFirebase(merchantId,updatedList);return updatedList;', 'const persisted = await syncCustomersToFirebase(merchantId,updatedList); return persisted ? updatedList : null;');
+c = c.replace(oldVisit[0], newVisit + 'export function claimMembershipReward');
+
+const oldClaim = c.match(/export function claimMembershipReward\([\s\S]*?\n?\}$/);
+if (!oldClaim) throw new Error('claimMembershipReward function not found');
+let claim = oldClaim[0];
+claim = claim.replace('export function claimMembershipReward(', 'export async function claimMembershipReward(');
+claim = claim.replace('void syncCustomersToFirebase(merchantId,updated);return{customers:updated,success:true,', 'const persisted = await syncCustomersToFirebase(merchantId,updated); if (!persisted) return{customers,success:false,message:\'Gagal menyimpan reward customer ke cloud.\'}; return{customers:updated,success:true,');
+c = c.replace(oldClaim[0], claim);
+fs.writeFileSync(customer, c);
+
+const cv = 'src/components/CustomerView.tsx';
+let v = fs.readFileSync(cv, 'utf8');
+v = v.replace('const claimReward = (reward: MembershipRewardType) => {', 'const claimReward = async (reward: MembershipRewardType) => {');
+v = v.replace('const result = claimMembershipReward(customers, cardCustomer.id, reward, merchantId);', 'const result = await claimMembershipReward(customers, cardCustomer.id, reward, merchantId);');
+v = v.replace('onSaveCustomer({ ...updated }, updated.id);', 'await onSaveCustomer({ ...updated }, updated.id);');
+v = v.replace('onSaveCustomer: (customerData: Omit<Customer, \'id\'>, id?: string) => void;', 'onSaveCustomer: (customerData: Omit<Customer, \'id\'>, id?: string) => void | Promise<void>;');
+fs.writeFileSync(cv, v);
+
+console.log('Stage 4C source migration completed.');
+NODE
+      - name: Validate source markers
+        run: |
+          grep -q 'STAGE4C_SOURCE_MIGRATED' src/App.tsx
+          grep -q 'async function recordCustomerVisit' src/services/customerService.ts
+          grep -q 'async function claimMembershipReward' src/services/customerService.ts
+          grep -q 'await syncCustomersToFirebase' src/services/customerService.ts
+      - name: Commit migrated source and remove migration workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/services/customerService.ts src/components/CustomerView.tsx .github/workflows/stage4c-source-migrate.yml
+          git rm .github/workflows/stage4c-source-migrate.yml
+          git commit -m "fix: make settings and customer persistence cloud-authoritative"
+          git push
