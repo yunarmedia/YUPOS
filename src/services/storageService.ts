@@ -33,19 +33,24 @@ export function saveLocalData<T>(key: string, value: T): void { try { localStora
 export async function hydrateMerchantDataFromFirebase(merchantId: string, businessType: BusinessType): Promise<boolean> {
   try {
     const id = requireMerchantId(merchantId);
-    const [settingsSnap, productsSnap, ordersSnap, expensesSnap, pettyCashSnap] = await Promise.all([
-      getDoc(doc(db, 'yupos_config', id, 'settings', 'data')),
-      getDoc(doc(db, 'yupos_catalog', id, businessType, 'products')),
-      getDoc(doc(db, 'yupos_transactions', id, businessType, 'orders')),
-      getDoc(doc(db, 'yupos_finances', id, businessType, 'expenses')),
-      getDoc(doc(db, 'yupos_finances', id, businessType, 'pettyCash')),
+    const settingsSnap = await getDoc(doc(db, 'yupos_config', id, 'settings', 'data'));
+    const cloudSettings = settingsSnap.exists() ? mergeSettings(settingsSnap.data() as StoreSettings) : null;
+    const resolvedBusinessType = (cloudSettings?.businessType || businessType) as BusinessType;
+
+    if (cloudSettings) saveMerchantSettings(id, cloudSettings);
+
+    const [productsSnap, ordersSnap, expensesSnap, pettyCashSnap] = await Promise.all([
+      getDoc(doc(db, 'yupos_catalog', id, resolvedBusinessType, 'products')),
+      getDoc(doc(db, 'yupos_transactions', id, resolvedBusinessType, 'orders')),
+      getDoc(doc(db, 'yupos_finances', id, resolvedBusinessType, 'expenses')),
+      getDoc(doc(db, 'yupos_finances', id, resolvedBusinessType, 'pettyCash')),
     ]);
-    if (settingsSnap.exists()) saveMerchantSettings(id, mergeSettings(settingsSnap.data() as StoreSettings));
-    if (productsSnap.exists()) saveMerchantProducts(id, businessType, (productsSnap.data().items || []) as ProductItem[]);
-    if (ordersSnap.exists()) saveMerchantOrders(id, businessType, (ordersSnap.data().list || []) as Order[]);
-    if (expensesSnap.exists()) saveMerchantExpenses(id, businessType, (expensesSnap.data().list || []) as Expense[]);
-    if (pettyCashSnap.exists()) saveMerchantPettyCash(id, businessType, Number(pettyCashSnap.data().amount || 0));
-    return true;
+
+    if (productsSnap.exists()) saveMerchantProducts(id, resolvedBusinessType, (productsSnap.data().items || []) as ProductItem[]);
+    if (ordersSnap.exists()) saveMerchantOrders(id, resolvedBusinessType, (ordersSnap.data().list || []) as Order[]);
+    if (expensesSnap.exists()) saveMerchantExpenses(id, resolvedBusinessType, (expensesSnap.data().list || []) as Expense[]);
+    if (pettyCashSnap.exists()) saveMerchantPettyCash(id, resolvedBusinessType, Number(pettyCashSnap.data().amount || 0));
+    return Boolean(settingsSnap.exists() || productsSnap.exists() || ordersSnap.exists() || expensesSnap.exists() || pettyCashSnap.exists());
   } catch (err) { console.warn('Firebase merchant hydration warning:', err); return false; }
 }
 
