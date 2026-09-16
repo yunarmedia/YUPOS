@@ -15,7 +15,8 @@ import {
 } from './types';
 import { BUSINESS_PRESETS } from './config/businessCategories';
 import { 
-  defaultSettings, 
+  defaultSettings,
+  hydrateMerchantDataFromFirebase,
   loadMerchantSettings,
   saveMerchantSettings,
   loadMerchantProducts,
@@ -35,6 +36,7 @@ import {
 import {
   loadCustomers,
   saveCustomers,
+  hydrateCustomersFromFirebase,
   syncCustomersToFirebase,
   recordCustomerVisit
 } from './services/customerService';
@@ -191,20 +193,48 @@ export default function App() {
     }
   };
 
-  // Reload isolated data whenever merchant changes (login / switch merchant)
+  // Reload isolated data whenever merchant changes (login / switch merchant).
+  // localStorage is used only as a fast cache; Firestore is hydrated immediately afterwards.
   useEffect(() => {
-    if (merchant?.uid) {
-      const currentMId = merchant.uid;
-      const loadedSettings = loadMerchantSettings(currentMId);
-      setSettings(loadedSettings);
-      setProducts(loadMerchantProducts(currentMId, loadedSettings.businessType));
-      setOrders(loadMerchantOrders(currentMId, loadedSettings.businessType));
-      setExpenses(loadMerchantExpenses(currentMId, loadedSettings.businessType));
-      setPettyCash(loadMerchantPettyCash(currentMId, loadedSettings.businessType));
+    let cancelled = false;
+
+    if (!merchant?.uid) return;
+
+    const currentMId = merchant.uid;
+    const loadedSettings = loadMerchantSettings(currentMId);
+
+    // Fast path: render the last local cache immediately.
+    setSettings(loadedSettings);
+    setProducts(loadMerchantProducts(currentMId, loadedSettings.businessType));
+    setOrders(loadMerchantOrders(currentMId, loadedSettings.businessType));
+    setExpenses(loadMerchantExpenses(currentMId, loadedSettings.businessType));
+    setPettyCash(loadMerchantPettyCash(currentMId, loadedSettings.businessType));
+    setCustomers(loadCustomers(currentMId));
+    setCart([]);
+    setEditingOrder(null);
+
+    // Source-of-truth path: hydrate from Firestore, then re-read the cache that was
+    // populated from Firestore. This also resolves the authoritative businessType.
+    void (async () => {
+      await Promise.all([
+        hydrateMerchantDataFromFirebase(currentMId, loadedSettings.businessType),
+        hydrateCustomersFromFirebase(currentMId),
+      ]);
+
+      if (cancelled) return;
+
+      const hydratedSettings = loadMerchantSettings(currentMId);
+      setSettings(hydratedSettings);
+      setProducts(loadMerchantProducts(currentMId, hydratedSettings.businessType));
+      setOrders(loadMerchantOrders(currentMId, hydratedSettings.businessType));
+      setExpenses(loadMerchantExpenses(currentMId, hydratedSettings.businessType));
+      setPettyCash(loadMerchantPettyCash(currentMId, hydratedSettings.businessType));
       setCustomers(loadCustomers(currentMId));
-      setCart([]);
-      setEditingOrder(null);
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [merchant?.uid]);
 
   // Firebase Auth is authoritative. Do not restore merchant identity from localStorage.
