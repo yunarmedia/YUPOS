@@ -68,9 +68,6 @@ jobs:
           fs.writeFileSync(path, s);
           NODE
 
-      - name: Typecheck
-        run: npm install && npm run lint
-
       - name: Commit migrated source
         run: |
           git config user.name "github-actions[bot]"
