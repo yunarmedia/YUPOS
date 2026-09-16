@@ -256,9 +256,11 @@ export default function App() {
   }, []);
 
   // Customizable Auto-shift scheduler (consumes custom hours shift1Start/End & shift2Start/End)
+  const autoShiftSyncRef = useRef(false);
+
   useEffect(() => {
-    const checkShift = () => {
-      if (settings.manualOverride) return;
+    const checkShift = async () => {
+      if (settings.manualOverride || autoShiftSyncRef.current) return;
 
       const now = new Date();
       const curTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -272,12 +274,18 @@ export default function App() {
         const mId = merchant?.uid?.trim();
         if (!mId) return;
 
-        setSettings((prev) => {
-          const updated = { ...prev, activeShift: expectedShift };
-          saveMerchantSettings(mId, updated);
-          syncConfigToFirebase(updated, mId);
-          return updated;
-        });
+        const updated = { ...settings, activeShift: expectedShift };
+        autoShiftSyncRef.current = true;
+        try {
+          const persisted = await syncConfigToFirebase(updated, mId);
+          if (!persisted) {
+            showToast('Gagal menyimpan perubahan shift ke cloud.', 'error');
+            return;
+          }
+          setSettings(updated);
+        } finally {
+          autoShiftSyncRef.current = false;
+        }
       }
     };
 
@@ -556,7 +564,7 @@ export default function App() {
 
     // Record customer visit & persist to database
     if (customerDetails && customerDetails.name && customerDetails.phone) {
-      const updatedCustomers = recordCustomerVisit(
+      const updatedCustomers = await recordCustomerVisit(
         customers,
         {
           name: customerDetails.name,
@@ -567,7 +575,11 @@ export default function App() {
         status === 'selesai' ? finalTotal : 0,
         currentMId
       );
-      setCustomers(updatedCustomers);
+      if (updatedCustomers) {
+        setCustomers(updatedCustomers);
+      } else {
+        showToast('Transaksi tersimpan, tetapi riwayat customer gagal disimpan ke cloud.', 'warning');
+      }
     }
 
     // Reset cashier cart
@@ -623,45 +635,31 @@ export default function App() {
   };
 
   // Update store settings & switch business models
-  const handleUpdateSettings = (newSettings: Partial<StoreSettings>) => {
+  const handleUpdateSettings = async (newSettings: Partial<StoreSettings>) => {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
 
-    setSettings((prev) => {
-      const updated = { ...prev, ...newSettings };
-      saveMerchantSettings(currentMId, updated);
-      syncConfigToFirebase(updated, currentMId);
+    const previous = settings;
+    const updated = { ...previous, ...newSettings };
+    const persisted = await syncConfigToFirebase(updated, currentMId);
+    if (!persisted) {
+      showToast('Gagal menyimpan pengaturan ke cloud. Perubahan tidak diterapkan.', 'error');
+      return;
+    }
 
-      // When businessType changes: isolate data strictly!
-      // Save current items for old businessType, load items for new businessType
-      if (newSettings.businessType && newSettings.businessType !== prev.businessType) {
-        const oldType = prev.businessType;
-        const newType = newSettings.businessType;
+    setSettings(updated);
 
-        // Save current items under old businessType
-        saveMerchantProducts(currentMId, oldType, products);
-        saveMerchantOrders(currentMId, oldType, orders);
-        saveMerchantExpenses(currentMId, oldType, expenses);
-        saveMerchantPettyCash(currentMId, oldType, pettyCash);
+    if (newSettings.businessType && newSettings.businessType !== previous.businessType) {
+      const newType = newSettings.businessType;
+      setProducts(loadMerchantProducts(currentMId, newType));
+      setOrders(loadMerchantOrders(currentMId, newType));
+      setExpenses(loadMerchantExpenses(currentMId, newType));
+      setPettyCash(loadMerchantPettyCash(currentMId, newType));
+      setCart([]);
+      setEditingOrder(null);
+    }
 
-        // Load isolated items for new businessType
-        const switchedProducts = loadMerchantProducts(currentMId, newType);
-        const switchedOrders = loadMerchantOrders(currentMId, newType);
-        const switchedExpenses = loadMerchantExpenses(currentMId, newType);
-        const switchedPetty = loadMerchantPettyCash(currentMId, newType);
-
-        setProducts(switchedProducts);
-        setOrders(switchedOrders);
-        setExpenses(switchedExpenses);
-        setPettyCash(switchedPetty);
-
-        // Clear active cart to avoid cross-business mismatched items
-        setCart([]);
-        setEditingOrder(null);
-      }
-
-      return updated;
-    });
+    showToast('Pengaturan berhasil disimpan.', 'success');
   };
 
   // Product CRUD strictly scoped to active merchant & businessType
@@ -1154,3 +1152,4 @@ export default function App() {
 }
 
 // STAGE4B_SOURCE_MIGRATED
+// STAGE4C_SOURCE_MIGRATED

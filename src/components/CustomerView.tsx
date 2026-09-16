@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx';
 
 interface CustomerViewProps {
   customers: Customer[];
-  onSaveCustomer: (customerData: Omit<Customer, 'id'>, id?: string) => void;
+  onSaveCustomer: (customerData: Omit<Customer, 'id'>, id?: string) => void | Promise<void>;
   onDeleteCustomer: (id: string) => void;
   onToggleMembership: (id: string) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
@@ -83,12 +83,12 @@ export const CustomerView: React.FC<CustomerViewProps> = ({ customers, onSaveCus
     setIsModalOpen(false);
   };
 
-  const claimReward = (reward: MembershipRewardType) => {
+  const claimReward = async (reward: MembershipRewardType) => {
     if (!cardCustomer) return;
-    const result = claimMembershipReward(customers, cardCustomer.id, reward, merchantId);
+    const result = await claimMembershipReward(customers, cardCustomer.id, reward, merchantId);
     if (!result.success) { onShowToast(result.message, 'warning'); return; }
     const updated = result.customers.find((c) => c.id === cardCustomer.id);
-    if (updated) { onSaveCustomer({ ...updated }, updated.id); setCardCustomer(updated); setHistoryCustomer(updated); }
+    if (updated) { await onSaveCustomer({ ...updated }, updated.id); setCardCustomer(updated); setHistoryCustomer(updated); }
     onShowToast(result.message, 'success');
   };
 
