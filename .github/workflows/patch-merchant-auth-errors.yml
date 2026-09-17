@@ -1,0 +1,35 @@
+name: Patch Merchant Auth Errors
+
+on:
+  push:
+    paths:
+      - 'scripts/patch-merchant-auth-errors.mjs'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, 'fix: expose actionable merchant auth errors') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch source
+        run: node scripts/patch-merchant-auth-errors.mjs
+
+      - name: Validate source
+        run: |
+          grep -q "STAGE_AUTH_ERRORS_PATCHED" src/components/MerchantLogin.tsx
+          grep -q "auth/invalid-credential" src/components/MerchantLogin.tsx
+
+      - name: Commit patched source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/MerchantLogin.tsx
+          git diff --cached --quiet || git commit -m "fix: expose actionable merchant auth errors"
+          git push
