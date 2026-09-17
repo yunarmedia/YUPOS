@@ -23,3 +23,5 @@ let updated = source.replace(loginOld, loginNew).replace(resetOld, resetNew);
 updated = `// STAGE_AUTH_ERRORS_PATCHED\n${updated}`;
 fs.writeFileSync(path, updated);
 console.log('Merchant auth error handling patched successfully.');
+
+// Triggered intentionally to apply the one-time source migration.
