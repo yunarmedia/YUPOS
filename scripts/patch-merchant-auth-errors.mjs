@@ -24,4 +24,5 @@ updated = `// STAGE_AUTH_ERRORS_PATCHED\n${updated}`;
 fs.writeFileSync(path, updated);
 console.log('Merchant auth error handling patched successfully.');
 
-// Triggered intentionally to apply the one-time source migration.
+// One-time source migration trigger.
+// Do not remove until the workflow has committed the patched source.
