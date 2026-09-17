@@ -1,3 +1,4 @@
+// STAGE_AUTH_ERRORS_PATCHED
 import React, { useState } from 'react';
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -73,16 +74,20 @@ export const MerchantLogin: React.FC<MerchantLoginProps> = ({ onLoginSuccess }) 
       });
     } catch (err: any) {
       const code = String(err?.code || '');
-      if (code === 'auth/user-not-found') {
-        setErrorMessage(UNREGISTERED_MESSAGE);
+      if (code === 'auth/invalid-credential' || code === 'auth/user-not-found') {
+        setErrorMessage('Email atau kata sandi tidak valid.');
+      } else if (code === 'auth/user-disabled') {
+        setErrorMessage('Akun ini dinonaktifkan. Hubungi tim YUPOS.');
       } else if (code === 'auth/too-many-requests') {
         setErrorMessage('Terlalu banyak percobaan login. Tunggu beberapa saat lalu coba lagi.');
       } else if (code === 'auth/network-request-failed') {
         setErrorMessage('Koneksi internet bermasalah. Periksa jaringan Anda.');
       } else if (code === 'auth/invalid-email') {
         setErrorMessage('Format email tidak valid.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setErrorMessage('Login email/password belum diaktifkan pada project Firebase.');
       } else {
-        setErrorMessage('Email atau kata sandi tidak sesuai. Silakan periksa kembali data Anda.');
+        setErrorMessage(`Autentikasi gagal. Kode: ${code || 'unknown'}`);
       }
     } finally {
       setLoading(false);
@@ -103,16 +108,18 @@ export const MerchantLogin: React.FC<MerchantLoginProps> = ({ onLoginSuccess }) 
       setSuccessMessage('Tautan reset kata sandi telah dikirim ke email terdaftar. Periksa Inbox atau Spam.');
     } catch (err: any) {
       const code = String(err?.code || '');
-      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
-        setErrorMessage(UNREGISTERED_MESSAGE);
-      } else if (code === 'auth/invalid-email') {
+      if (code === 'auth/invalid-email') {
         setErrorMessage('Format email tidak valid.');
       } else if (code === 'auth/too-many-requests') {
         setErrorMessage('Terlalu banyak permintaan reset. Tunggu beberapa saat lalu coba lagi.');
       } else if (code === 'auth/network-request-failed') {
         setErrorMessage('Koneksi internet bermasalah. Periksa jaringan Anda.');
+      } else if (code === 'auth/user-disabled') {
+        setErrorMessage('Akun ini dinonaktifkan. Hubungi tim YUPOS.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setErrorMessage('Pemulihan kata sandi email belum diaktifkan pada project Firebase.');
       } else {
-        setErrorMessage(UNREGISTERED_MESSAGE);
+        setErrorMessage(`Permintaan reset gagal. Kode: ${code || 'unknown'}`);
       }
     } finally {
       setLoading(false);
