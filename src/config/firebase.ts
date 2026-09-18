@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase/firestore';
 
 // Client Firebase configuration for YUPOS.
 export const firebaseConfig = {
-  apiKey: "AIzaSyCuKy-_tBuCUuUluUfNLYIBdh1u4KYzQ1k",
+  apiKey: "AIzaSyAuPCaxBAXYUgkBtr0v1kmiqC2RTCe8dpI",
   authDomain: "yuposcashier.firebaseapp.com",
   projectId: "yuposcashier",
   storageBucket: "yuposcashier.firebasestorage.app",
