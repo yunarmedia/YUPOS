@@ -3,6 +3,8 @@ import { db } from '../config/firebase';
 
 type JsonRecord = Record<string, unknown>;
 
+const hydrationInFlight = new Map<string, Promise<boolean>>();
+
 function readLocal<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -51,17 +53,44 @@ function settingsRichness(settings: JsonRecord): number {
   return keys.reduce((score, key) => score + (isMeaningful(settings[key]) ? 1 : 0), 0);
 }
 
-function mergeSettings(local: JsonRecord, cloud: JsonRecord): { settings: JsonRecord; preferLocal: boolean } {
-  const preferLocal = settingsRichness(local) > settingsRichness(cloud);
+function cloudUpdatedAt(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value && typeof value === 'object' && 'toMillis' in value && typeof (value as { toMillis?: unknown }).toMillis === 'function') {
+    try { return Number((value as { toMillis: () => number }).toMillis()) || 0; } catch { return 0; }
+  }
+  return 0;
+}
 
-  if (preferLocal) {
-    // The local snapshot is richer. This is the recovery path for older builds
-    // that created a default cloud settings document before merchant setup.
+function localUpdatedAt(merchantId: string): number {
+  try {
+    const raw = localStorage.getItem(`yupos_${merchantId}_settings_meta`);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const value = Number(parsed?.updatedAt);
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function mergeSettings(local: JsonRecord, cloud: JsonRecord, merchantId: string): { settings: JsonRecord; preferLocal: boolean } {
+  const localTimestamp = localUpdatedAt(merchantId);
+  const cloudTimestamp = cloudUpdatedAt(cloud.updatedAt);
+
+  // Normal operation is timestamp-authoritative. A local timestamp newer than
+  // the cloud snapshot means the merchant changed data after that snapshot.
+  if (localTimestamp > 0 && localTimestamp > cloudTimestamp) {
+    return { settings: { ...cloud, ...local }, preferLocal: true };
+  }
+
+  // Backward compatibility for snapshots created before settings metadata was
+  // introduced: retain the old recovery rule only when no local timestamp exists.
+  if (localTimestamp === 0 && settingsRichness(local) > settingsRichness(cloud)) {
     return { settings: { ...cloud, ...local }, preferLocal: true };
   }
 
   const merged: JsonRecord = { ...local };
   for (const [key, cloudValue] of Object.entries(cloud)) {
+    if (key === 'updatedAt' || key === 'merchantId') continue;
     const localValue = local[key];
     if (isMeaningful(cloudValue) || !isMeaningful(localValue)) {
       merged[key] = cloudValue;
@@ -82,13 +111,17 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
   const merchantId = String(uid || '').trim();
   if (!merchantId) return false;
 
-  try {
+  const existing = hydrationInFlight.get(merchantId);
+  if (existing) return existing;
+
+  const operation = (async (): Promise<boolean> => {
+    try {
     const settingsRef = doc(db, 'yupos_config', merchantId, 'settings', 'data');
     const settingsSnap = await getDoc(settingsRef);
 
     const localSettings = readLocal<JsonRecord>(`yupos_${merchantId}_settings`, {});
     const cloudSettings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
-    const mergedResult = mergeSettings(localSettings, cloudSettings);
+    const mergedResult = mergeSettings(localSettings, cloudSettings, merchantId);
     const mergedSettings = mergedResult.settings;
 
     const localBusinessType = String(localSettings.businessType || '').trim();
@@ -96,17 +129,24 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
 
     // If local contains richer business configuration than the cloud snapshot,
     // repair the cloud document before continuing.
+    const localTimestamp = localUpdatedAt(merchantId);
+    const cloudTimestamp = cloudUpdatedAt(cloudSettings.updatedAt);
     const repairSettings =
-      !settingsSnap.exists() ||
-      mergedResult.preferLocal ||
-      Object.entries(localSettings).some(([key, localValue]) => isMeaningful(localValue) && !isMeaningful(cloudSettings[key]));
+      Object.keys(localSettings).length > 0 &&
+      (!settingsSnap.exists() || mergedResult.preferLocal || localTimestamp > cloudTimestamp);
 
-    if (repairSettings && Object.keys(localSettings).length > 0) {
+    if (repairSettings) {
+      const repairUpdatedAt = Math.max(localTimestamp, Date.now());
       await setDoc(
         settingsRef,
-        { ...localSettings, merchantId, updatedAt: Date.now() },
+        { ...localSettings, merchantId, updatedAt: repairUpdatedAt },
         { merge: true },
       );
+      try {
+        localStorage.setItem(`yupos_${merchantId}_settings_meta`, JSON.stringify({ updatedAt: repairUpdatedAt }));
+      } catch (error) {
+        console.warn('Merchant settings metadata repair failed:', error);
+      }
     }
 
     writeLocal(`yupos_${merchantId}_settings`, mergedSettings);
@@ -201,9 +241,16 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
       );
     }
 
-    return true;
-  } catch (error) {
-    console.error('Merchant cloud hydration/repair failed:', error);
-    return false;
-  }
+      return true;
+    } catch (error) {
+      console.error('Merchant cloud hydration/repair failed:', error);
+      return false;
+    }
+  })();
+
+  hydrationInFlight.set(merchantId, operation);
+  void operation.finally(() => {
+    if (hydrationInFlight.get(merchantId) === operation) hydrationInFlight.delete(merchantId);
+  });
+  return operation;
 }
