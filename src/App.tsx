@@ -632,9 +632,9 @@ export default function App() {
   };
 
   // Update store settings & switch business models
-  const handleUpdateSettings = async (newSettings: Partial<StoreSettings>) => {
+  const handleUpdateSettings = async (newSettings: Partial<StoreSettings>): Promise<boolean> => {
     const currentMId = requireMerchantId();
-    if (!currentMId) return;
+    if (!currentMId) return false;
 
     // Read the latest merchant cache instead of a possibly stale React closure.
     // This prevents rapid settings/category/staff edits from overwriting each other.
@@ -643,7 +643,7 @@ export default function App() {
     const persisted = await syncConfigToFirebase(updated, currentMId);
     if (!persisted) {
       showToast('Gagal menyimpan pengaturan ke cloud. Perubahan tidak diterapkan.', 'error');
-      return;
+      return false;
     }
 
     setSettings(updated);
@@ -659,6 +659,7 @@ export default function App() {
     }
 
     showToast('Pengaturan berhasil disimpan.', 'success');
+    return true;
   };
 
   // Product CRUD strictly scoped to active merchant & businessType
