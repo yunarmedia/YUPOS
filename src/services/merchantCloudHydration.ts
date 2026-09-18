@@ -1,43 +1,86 @@
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
+type JsonRecord = Record<string, unknown>;
+
+function readLocal<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocal(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (error) {
+    console.warn('Merchant local cache write failed:', error);
+  }
+}
+
+function isMeaningful(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === 'object') return Object.keys(value as object).length > 0;
+  return value !== undefined && value !== null;
+}
+
+function mergeSettings(local: JsonRecord, cloud: JsonRecord): JsonRecord {
+  const merged: JsonRecord = { ...local };
+
+  for (const [key, cloudValue] of Object.entries(cloud)) {
+    const localValue = local[key];
+
+    // A stale/default cloud document must never erase a richer merchant cache.
+    // Cloud values still win when they are meaningful and local is empty.
+    if (isMeaningful(cloudValue) || !isMeaningful(localValue)) {
+      merged[key] = cloudValue;
+    }
+  }
+
+  return merged;
+}
+
 /**
- * Restore merchant-scoped cloud data into the local cache without destroying
- * an existing local dataset when the cloud copy is empty or incomplete.
+ * Restore merchant data from Firestore while also repairing Firestore from a
+ * richer merchant-local cache. This is deliberately bidirectional because old
+ * YUPOS builds could leave a partially initialized/default cloud document.
+ *
+ * Firebase Auth UID remains the tenant boundary; localStorage is only a cache.
  */
 export async function hydrateMerchantDataFromFirebase(uid: string): Promise<boolean> {
   const merchantId = String(uid || '').trim();
   if (!merchantId) return false;
 
   try {
-    const settingsSnap = await getDoc(doc(db, 'yupos_config', merchantId, 'settings', 'data'));
-    if (!settingsSnap.exists()) return false;
+    const settingsRef = doc(db, 'yupos_config', merchantId, 'settings', 'data');
+    const settingsSnap = await getDoc(settingsRef);
 
-    const cloudSettings = settingsSnap.data() || {};
-    const localSettingsRaw = localStorage.getItem(`yupos_${merchantId}_settings`);
-    let localSettings: Record<string, unknown> = {};
-    try {
-      localSettings = localSettingsRaw ? JSON.parse(localSettingsRaw) : {};
-    } catch {
-      localSettings = {};
+    const localSettings = readLocal<JsonRecord>(`yupos_${merchantId}_settings`, {});
+    const cloudSettings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
+    const mergedSettings = mergeSettings(localSettings, cloudSettings);
+
+    const localBusinessType = String(localSettings.businessType || '').trim();
+    const businessType = String(mergedSettings.businessType || localBusinessType || 'custom');
+
+    // If local contains richer business configuration than the cloud snapshot,
+    // repair the cloud document before continuing.
+    const repairSettings =
+      !settingsSnap.exists() ||
+      Object.entries(localSettings).some(([key, localValue]) => isMeaningful(localValue) && !isMeaningful(cloudSettings[key]));
+
+    if (repairSettings && Object.keys(localSettings).length > 0) {
+      await setDoc(
+        settingsRef,
+        { ...localSettings, merchantId, updatedAt: Date.now() },
+        { merge: true },
+      );
     }
 
-    // Cloud remains the preferred source, but empty cloud fields must not wipe
-    // business identity/configuration that already exists locally.
-    const mergedSettings: Record<string, unknown> = { ...localSettings };
-    for (const [key, value] of Object.entries(cloudSettings)) {
-      const isEmptyString = typeof value === 'string' && value.trim() === '';
-      const isEmptyArray = Array.isArray(value) && value.length === 0;
-      const isEmptyObject = value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value as object).length === 0;
-      if (!isEmptyString && !isEmptyArray && !isEmptyObject) mergedSettings[key] = value;
-      else if (!(key in mergedSettings)) mergedSettings[key] = value;
-    }
-
-    const businessType = String(mergedSettings.businessType || cloudSettings.businessType || 'custom');
-    const write = (key: string, value: unknown) => localStorage.setItem(key, JSON.stringify(value));
-
-    write(`yupos_${merchantId}_settings`, mergedSettings);
-    write('yupos_settings', mergedSettings);
+    writeLocal(`yupos_${merchantId}_settings`, mergedSettings);
+    writeLocal('yupos_settings', mergedSettings);
 
     const [productsSnap, ordersSnap, expensesSnap, pettyCashSnap, customersSnap] = await Promise.all([
       getDoc(doc(db, 'yupos_catalog', merchantId, businessType, 'products')),
@@ -47,56 +90,90 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
       getDoc(doc(db, 'yupos_crm', merchantId, 'customers', 'data')),
     ]);
 
-    const chooseList = <T,>(localKey: string, cloudValue: unknown): T[] | null => {
-      let local: T[] = [];
-      try {
-        const raw = localStorage.getItem(localKey);
-        local = raw ? (JSON.parse(raw) as T[]) : [];
-      } catch {
-        local = [];
-      }
+    const chooseList = <T,>(localKey: string, cloudValue: unknown): { value: T[] | null; repair: boolean } => {
+      const local = readLocal<T[]>(localKey, []);
       const cloud = Array.isArray(cloudValue) ? (cloudValue as T[]) : null;
-      if (!cloud) return local.length ? local : null;
-      // Never replace existing merchant data with an empty cloud list.
-      if (cloud.length === 0 && local.length > 0) return local;
-      return cloud;
+
+      if (!cloud || (cloud.length === 0 && local.length > 0)) {
+        return { value: local.length ? local : null, repair: local.length > 0 };
+      }
+
+      return { value: cloud, repair: false };
     };
 
-    const products = chooseList<unknown>(
-      `yupos_${merchantId}_${businessType}_products`,
-      productsSnap.exists() ? productsSnap.data()?.items : null,
-    );
-    const orders = chooseList<unknown>(
-      `yupos_${merchantId}_${businessType}_orders`,
-      ordersSnap.exists() ? ordersSnap.data()?.list : null,
-    );
-    const expenses = chooseList<unknown>(
-      `yupos_${merchantId}_${businessType}_expenses`,
-      expensesSnap.exists() ? expensesSnap.data()?.list : null,
-    );
-    const customers = chooseList<unknown>(
-      `yupos_${merchantId}_customers`,
-      customersSnap.exists() ? customersSnap.data()?.list : null,
-    );
+    const productsKey = `yupos_${merchantId}_${businessType}_products`;
+    const ordersKey = `yupos_${merchantId}_${businessType}_orders`;
+    const expensesKey = `yupos_${merchantId}_${businessType}_expenses`;
+    const customersKey = `yupos_${merchantId}_customers`;
 
-    if (products) write(`yupos_${merchantId}_${businessType}_products`, products);
-    if (orders) write(`yupos_${merchantId}_${businessType}_orders`, orders);
-    if (expenses) write(`yupos_${merchantId}_${businessType}_expenses`, expenses);
-    if (customers) write(`yupos_${merchantId}_customers`, customers);
+    const products = chooseList<unknown>(productsKey, productsSnap.exists() ? productsSnap.data()?.items : null);
+    const orders = chooseList<unknown>(ordersKey, ordersSnap.exists() ? ordersSnap.data()?.list : null);
+    const expenses = chooseList<unknown>(expensesKey, expensesSnap.exists() ? expensesSnap.data()?.list : null);
+    const customers = chooseList<unknown>(customersKey, customersSnap.exists() ? customersSnap.data()?.list : null);
 
-    const cloudPettyCash = pettyCashSnap.exists() ? pettyCashSnap.data()?.amount : undefined;
-    const localPettyKey = `yupos_${merchantId}_${businessType}_pettyCash`;
-    const localPettyRaw = localStorage.getItem(localPettyKey);
-    const hasCloudPetty = Number.isFinite(Number(cloudPettyCash));
-    const hasLocalPetty = localPettyRaw !== null && Number.isFinite(Number(localPettyRaw));
-    if (hasCloudPetty || hasLocalPetty) {
-      // A valid cloud value is authoritative; otherwise retain the local value.
-      write(localPettyKey, hasCloudPetty ? Number(cloudPettyCash) : Number(localPettyRaw));
+    if (products.value) {
+      writeLocal(productsKey, products.value);
+      if (products.repair) {
+        await setDoc(
+          doc(db, 'yupos_catalog', merchantId, businessType, 'products'),
+          { items: products.value, merchantId, businessType, updatedAt: Date.now() },
+          { merge: true },
+        );
+      }
+    }
+
+    if (orders.value) {
+      writeLocal(ordersKey, orders.value);
+      if (orders.repair) {
+        await setDoc(
+          doc(db, 'yupos_transactions', merchantId, businessType, 'orders'),
+          { list: orders.value, merchantId, businessType, updatedAt: Date.now() },
+          { merge: true },
+        );
+      }
+    }
+
+    if (expenses.value) {
+      writeLocal(expensesKey, expenses.value);
+      if (expenses.repair) {
+        await setDoc(
+          doc(db, 'yupos_finances', merchantId, businessType, 'expenses'),
+          { list: expenses.value, merchantId, businessType, updatedAt: Date.now() },
+          { merge: true },
+        );
+      }
+    }
+
+    if (customers.value) {
+      writeLocal(customersKey, customers.value);
+      if (customers.repair) {
+        await setDoc(
+          doc(db, 'yupos_crm', merchantId, 'customers', 'data'),
+          { list: customers.value, merchantId, updatedAt: Date.now() },
+          { merge: true },
+        );
+      }
+    }
+
+    const pettyKey = `yupos_${merchantId}_${businessType}_pettyCash`;
+    const localPettyRaw = localStorage.getItem(pettyKey);
+    const cloudPetty = pettyCashSnap.exists() ? pettyCashSnap.data()?.amount : undefined;
+    const localPetty = localPettyRaw === null ? undefined : Number(localPettyRaw);
+
+    if (Number.isFinite(Number(cloudPetty))) {
+      writeLocal(pettyKey, Number(cloudPetty));
+    } else if (Number.isFinite(localPetty)) {
+      writeLocal(pettyKey, localPetty);
+      await setDoc(
+        doc(db, 'yupos_finances', merchantId, businessType, 'pettyCash'),
+        { amount: Number(localPetty), merchantId, businessType, updatedAt: Date.now() },
+        { merge: true },
+      );
     }
 
     return true;
   } catch (error) {
-    console.warn('Merchant cloud hydration warning:', error);
+    console.error('Merchant cloud hydration/repair failed:', error);
     return false;
   }
 }
