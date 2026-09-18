@@ -259,19 +259,23 @@ export default function App() {
     const checkShift = async () => {
       if (settings.manualOverride || autoShiftSyncRef.current) return;
 
+      const mId = merchant?.uid?.trim();
+      if (!mId) return;
+
+      // Always start from the latest persisted merchant snapshot. The React
+      // closure can be stale and must never be allowed to overwrite profile,
+      // categories, staff, or other settings during an automatic shift change.
+      const latestSettings = loadMerchantSettings(mId);
       const now = new Date();
       const curTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const s1Start = settings.shift1Start || '10:00';
-      const s1End = settings.shift1End || '13:00';
+      const s1Start = latestSettings.shift1Start || '10:00';
+      const s1End = latestSettings.shift1End || '13:00';
 
       const inShift1 = isTimeWithinRange(curTime, s1Start, s1End);
       const expectedShift: '1' | '2' = inShift1 ? '1' : '2';
 
-      if (settings.activeShift !== expectedShift) {
-        const mId = merchant?.uid?.trim();
-        if (!mId) return;
-
-        const updated = { ...settings, activeShift: expectedShift };
+      if (latestSettings.activeShift !== expectedShift) {
+        const updated = { ...latestSettings, activeShift: expectedShift };
         autoShiftSyncRef.current = true;
         try {
           const persisted = await syncConfigToFirebase(updated, mId);
@@ -290,12 +294,7 @@ export default function App() {
     const interval = setInterval(checkShift, 30000);
     return () => clearInterval(interval);
   }, [
-    settings.manualOverride, 
-    settings.activeShift, 
-    settings.shift1Start, 
-    settings.shift1End, 
-    settings.shift2Start, 
-    settings.shift2End, 
+    settings.manualOverride,
     merchant?.uid
   ]);
 
