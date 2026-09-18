@@ -39,6 +39,7 @@ import {
   syncCustomersToFirebase,
   recordCustomerVisit
 } from './services/customerService';
+import { hydrateMerchantDataFromFirebase as hydrateMerchantCloudData } from './services/merchantCloudHydration';
 
 import { MerchantLogin } from './components/MerchantLogin';
 import { Sidebar } from './components/Sidebar';
@@ -196,11 +197,14 @@ export default function App() {
   // localStorage is the fast cache; the shared cloud hydrator owns Firestore -> cache
   // reconciliation so a missing/empty cloud snapshot can never wipe an existing cache.
   useEffect(() => {
+    let cancelled = false;
+
     if (!merchant?.uid) return;
 
     const currentMId = merchant.uid;
     const loadedSettings = loadMerchantSettings(currentMId);
 
+    // Fast path: show the merchant-scoped local cache immediately.
     setSettings(loadedSettings);
     setProducts(loadMerchantProducts(currentMId, loadedSettings.businessType));
     setOrders(loadMerchantOrders(currentMId, loadedSettings.businessType));
@@ -209,6 +213,25 @@ export default function App() {
     setCustomers(loadCustomers(currentMId));
     setCart([]);
     setEditingOrder(null);
+
+    // Reconcile with Firestore using the shared safe hydrator. It preserves an
+    // existing local dataset when cloud snapshots are missing or empty.
+    void (async () => {
+      await hydrateMerchantCloudData(currentMId);
+      if (cancelled) return;
+
+      const hydratedSettings = loadMerchantSettings(currentMId);
+      setSettings(hydratedSettings);
+      setProducts(loadMerchantProducts(currentMId, hydratedSettings.businessType));
+      setOrders(loadMerchantOrders(currentMId, hydratedSettings.businessType));
+      setExpenses(loadMerchantExpenses(currentMId, hydratedSettings.businessType));
+      setPettyCash(loadMerchantPettyCash(currentMId, hydratedSettings.businessType));
+      setCustomers(loadCustomers(currentMId));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [merchant?.uid]);
 
   // Firebase Auth is authoritative. Do not restore merchant identity from localStorage.
