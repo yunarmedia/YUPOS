@@ -89,7 +89,31 @@ export function loadMerchantSettings(merchantId: string): StoreSettings { if (!m
 
 // Save helpers are cache-only by design. The cache is written only when explicitly requested
 // by hydration or after a successful Firestore write.
-export function saveMerchantSettings(merchantId: string, settings: StoreSettings, persistToCache = false): void { if (!merchantId || !persistToCache) return; saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), mergeSettings(settings)); }
+export function saveMerchantSettings(merchantId: string, settings: StoreSettings, persistToCache = false): void {
+  if (!merchantId || !persistToCache) return;
+  saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), mergeSettings(settings));
+}
+
+const settingsMetaKey = (merchantId: string): string => `yupos_${merchantId}_settings_meta`;
+
+function readSettingsMeta(merchantId: string): { updatedAt: number } {
+  try {
+    const raw = localStorage.getItem(settingsMetaKey(merchantId));
+    const parsed = raw ? JSON.parse(raw) : null;
+    const updatedAt = Number(parsed?.updatedAt);
+    return Number.isFinite(updatedAt) ? { updatedAt } : { updatedAt: 0 };
+  } catch {
+    return { updatedAt: 0 };
+  }
+}
+
+function writeSettingsMeta(merchantId: string, updatedAt: number): void {
+  try {
+    localStorage.setItem(settingsMetaKey(merchantId), JSON.stringify({ updatedAt }));
+  } catch (error) {
+    console.warn('Merchant settings metadata cache write failed:', error);
+  }
+}
 export function loadMerchantProducts(merchantId: string, businessType: BusinessType): ProductItem[] { if (!merchantId) return []; return loadLocalData<ProductItem[]>(getMerchantStorageKey(merchantId, businessType, 'products'), []).filter(item => !isLegacyDemoProduct(item)).map(item => ({ ...item, businessType, merchantId })); }
 export function saveMerchantProducts(merchantId: string, businessType: BusinessType, products: ProductItem[], persistToCache = false): void { if (!merchantId || !persistToCache) return; const id = String(merchantId).trim(); saveLocalData(getMerchantStorageKey(id, businessType, 'products'), products.map(p => ({ ...p, merchantId: id, businessType }))); }
 export function loadMerchantOrders(merchantId: string, businessType: BusinessType): Order[] { if (!merchantId) return []; const parsed = loadLocalData<Order[]>(getMerchantStorageKey(merchantId, businessType, 'orders'), []); return normalizeOrderIds(dedupeOrders(parsed)).map(o => ({ ...o, merchantId, businessType })); }
@@ -104,16 +128,25 @@ export function syncConfigToFirebase(settings: StoreSettings, merchantId: string
     try {
       const id = requireMerchantId(merchantId);
       const clean = mergeSettings(sanitizeFirestoreData(settings));
-      // Keep the merchant cache durable even if the network/backend rejects or
-      // delays the cloud write. Firestore persistence also keeps the pending
-      // mutation across a browser refresh.
+      // The local snapshot is durable and carries a monotonic timestamp so the
+      // next bootstrap can distinguish a newer unsynced local mutation from an
+      // older/stale Firestore snapshot. This removes the need for heuristic
+      // "richness" comparisons during normal operation.
+      const previousMeta = readSettingsMeta(id);
+      const updatedAt = Math.max(Date.now(), previousMeta.updatedAt + 1);
+
       saveMerchantSettings(id, clean, true);
+      writeSettingsMeta(id, updatedAt);
+
       await setDoc(
         doc(db, 'yupos_config', id, 'settings', 'data'),
-        sanitizeFirestoreData({ ...clean, merchantId: id, updatedAt: Date.now() }),
+        sanitizeFirestoreData({ ...clean, merchantId: id, updatedAt }),
         { merge: true },
       );
+
+      // Re-write the exact successful snapshot so cache and cloud stay aligned.
       saveMerchantSettings(id, clean, true);
+      writeSettingsMeta(id, updatedAt);
       return true;
     } catch (err) {
       console.error('Firebase config sync failed:', err);
