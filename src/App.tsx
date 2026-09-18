@@ -636,7 +636,9 @@ export default function App() {
     const currentMId = requireMerchantId();
     if (!currentMId) return;
 
-    const previous = settings;
+    // Read the latest merchant cache instead of a possibly stale React closure.
+    // This prevents rapid settings/category/staff edits from overwriting each other.
+    const previous = loadMerchantSettings(currentMId);
     const updated = { ...previous, ...newSettings };
     const persisted = await syncConfigToFirebase(updated, currentMId);
     if (!persisted) {
