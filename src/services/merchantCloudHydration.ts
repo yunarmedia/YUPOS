@@ -27,20 +27,48 @@ function isMeaningful(value: unknown): boolean {
   return value !== undefined && value !== null;
 }
 
-function mergeSettings(local: JsonRecord, cloud: JsonRecord): JsonRecord {
-  const merged: JsonRecord = { ...local };
+function settingsRichness(settings: JsonRecord): number {
+  const keys = [
+    'storeName',
+    'storeAddress',
+    'storePhone',
+    'footer',
+    'logoBase64',
+    'customBusinessTypeName',
+    'categories',
+    'staffRoles',
+    'staffList',
+    'customPaymentMethods',
+    'membershipRewards',
+    'shift1Name',
+    'shift2Name',
+    'shift1Start',
+    'shift1End',
+    'shift2Start',
+    'shift2End',
+    'portalPins',
+  ];
+  return keys.reduce((score, key) => score + (isMeaningful(settings[key]) ? 1 : 0), 0);
+}
 
+function mergeSettings(local: JsonRecord, cloud: JsonRecord): { settings: JsonRecord; preferLocal: boolean } {
+  const preferLocal = settingsRichness(local) > settingsRichness(cloud);
+
+  if (preferLocal) {
+    // The local snapshot is richer. This is the recovery path for older builds
+    // that created a default cloud settings document before merchant setup.
+    return { settings: { ...cloud, ...local }, preferLocal: true };
+  }
+
+  const merged: JsonRecord = { ...local };
   for (const [key, cloudValue] of Object.entries(cloud)) {
     const localValue = local[key];
-
-    // A stale/default cloud document must never erase a richer merchant cache.
-    // Cloud values still win when they are meaningful and local is empty.
     if (isMeaningful(cloudValue) || !isMeaningful(localValue)) {
       merged[key] = cloudValue;
     }
   }
 
-  return merged;
+  return { settings: merged, preferLocal: false };
 }
 
 /**
@@ -60,7 +88,8 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
 
     const localSettings = readLocal<JsonRecord>(`yupos_${merchantId}_settings`, {});
     const cloudSettings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
-    const mergedSettings = mergeSettings(localSettings, cloudSettings);
+    const mergedResult = mergeSettings(localSettings, cloudSettings);
+    const mergedSettings = mergedResult.settings;
 
     const localBusinessType = String(localSettings.businessType || '').trim();
     const businessType = String(mergedSettings.businessType || localBusinessType || 'custom');
@@ -69,6 +98,7 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
     // repair the cloud document before continuing.
     const repairSettings =
       !settingsSnap.exists() ||
+      mergedResult.preferLocal ||
       Object.entries(localSettings).some(([key, localValue]) => isMeaningful(localValue) && !isMeaningful(cloudSettings[key]));
 
     if (repairSettings && Object.keys(localSettings).length > 0) {
