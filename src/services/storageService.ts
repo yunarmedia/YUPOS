@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, setDoc } from 'firebase/firestore';
 import { Order, Expense, ProductItem, StoreSettings, BusinessType } from '../types';
 import { auth, db } from '../config/firebase';
 
@@ -138,15 +138,30 @@ export function syncConfigToFirebase(settings: StoreSettings, merchantId: string
       saveMerchantSettings(id, clean, true);
       writeSettingsMeta(id, updatedAt);
 
-      await setDoc(
-        doc(db, 'yupos_config', id, 'settings', 'data'),
-        sanitizeFirestoreData({ ...clean, merchantId: id, updatedAt }),
-        { merge: true },
-      );
+      const settingsRef = doc(db, 'yupos_config', id, 'settings', 'data');
+      const payload = sanitizeFirestoreData({ ...clean, merchantId: id, updatedAt });
 
-      // Re-write the exact successful snapshot so cache and cloud stay aligned.
+      await setDoc(settingsRef, payload, { merge: true });
+
+      // Verify against the server after every settings write. A successful
+      // client-side enqueue is not enough for business-critical configuration.
+      const verifiedSnap = await getDocFromServer(settingsRef);
+      if (!verifiedSnap.exists()) {
+        throw new Error('Firestore settings document was not readable after write.');
+      }
+      const verified = verifiedSnap.data() as Record<string, unknown>;
+      for (const [key, value] of Object.entries(clean)) {
+        if (JSON.stringify(verified[key]) !== JSON.stringify(value)) {
+          throw new Error(`Firestore settings verification failed for field: ${key}`);
+        }
+      }
+      if (String(verified.merchantId || '') !== id) {
+        throw new Error('Firestore settings verification failed: merchantId mismatch.');
+      }
+
+      // Re-write the exact verified snapshot so cache and cloud stay aligned.
       saveMerchantSettings(id, clean, true);
-      writeSettingsMeta(id, updatedAt);
+      writeSettingsMeta(id, Number(verified.updatedAt) || updatedAt);
       return true;
     } catch (err) {
       console.error('Firebase config sync failed:', err);
