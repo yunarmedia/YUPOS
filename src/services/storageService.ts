@@ -143,25 +143,52 @@ export function syncConfigToFirebase(settings: StoreSettings, merchantId: string
 
       await setDoc(settingsRef, payload, { merge: true });
 
-      // Verify against the server after every settings write. A successful
-      // client-side enqueue is not enough for business-critical configuration.
-      const verifiedSnap = await getDocFromServer(settingsRef);
-      if (!verifiedSnap.exists()) {
-        throw new Error('Firestore settings document was not readable after write.');
-      }
-      const verified = verifiedSnap.data() as Record<string, unknown>;
-      for (const [key, value] of Object.entries(clean)) {
-        if (JSON.stringify(verified[key]) !== JSON.stringify(value)) {
-          throw new Error(`Firestore settings verification failed for field: ${key}`);
+      // Confirm the server copy when the network is available. Firestore can
+      // legitimately accept a write into its persistent local queue while the
+      // device is temporarily unable to perform a server read. That transient
+      // verification failure must not turn a successfully queued write into a
+      // false "save failed" state.
+      try {
+        const verifiedSnap = await getDocFromServer(settingsRef);
+        if (!verifiedSnap.exists()) {
+          throw new Error('Firestore settings document was not readable after write.');
         }
-      }
-      if (String(verified.merchantId || '') !== id) {
-        throw new Error('Firestore settings verification failed: merchantId mismatch.');
+        const verified = verifiedSnap.data() as Record<string, unknown>;
+        for (const [key, value] of Object.entries(clean)) {
+          if (JSON.stringify(verified[key]) !== JSON.stringify(value)) {
+            throw new Error(`Firestore settings verification failed for field: ${key}`);
+          }
+        }
+        if (String(verified.merchantId || '') !== id) {
+          throw new Error('Firestore settings verification failed: merchantId mismatch.');
+        }
+
+        writeSettingsMeta(id, Number(verified.updatedAt) || updatedAt);
+      } catch (verifyError: any) {
+        const code = String(verifyError?.code || '');
+        const message = String(verifyError?.message || verifyError || 'Unknown verification error');
+        const transient =
+          code === 'unavailable' ||
+          code === 'deadline-exceeded' ||
+          code === 'cancelled' ||
+          /offline|network|internet|failed to fetch|transport/i.test(message);
+
+        if (!transient) {
+          console.error('Firebase settings server verification failed:', verifyError);
+          return false;
+        }
+
+        // The write is already accepted by Firestore's persistent client
+        // queue. Keep the durable local snapshot and let Firestore retry when
+        // connectivity is restored.
+        console.warn('Firebase settings server verification deferred:', verifyError);
       }
 
-      // Re-write the exact verified snapshot so cache and cloud stay aligned.
+      // Cache is written before the cloud operation and remains the durable
+      // recovery snapshot. On a transient verification failure the queued
+      // Firestore write will still reconcile this snapshot once online.
       saveMerchantSettings(id, clean, true);
-      writeSettingsMeta(id, Number(verified.updatedAt) || updatedAt);
+      writeSettingsMeta(id, updatedAt);
       return true;
     } catch (err) {
       console.error('Firebase config sync failed:', err);
