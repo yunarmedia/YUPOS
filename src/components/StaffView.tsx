@@ -12,7 +12,7 @@ import { StoreSettings } from '../types';
 
 interface StaffViewProps {
   settings: StoreSettings;
-  onUpdateSettings: (newSettings: Partial<StoreSettings>) => void;
+  onUpdateSettings: (newSettings: Partial<StoreSettings>) => Promise<boolean>;
   onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
@@ -38,11 +38,11 @@ export const StaffView: React.FC<StaffViewProps> = ({
   // Delete modal state
   const [staffToDelete, setStaffToDelete] = useState<{ role: string; name: string } | null>(null);
 
-  const handleSaveShift = () => {
+  const handleSaveShift = async () => {
     const isManual = overrideSelect !== 'auto';
     const activeShift = isManual ? (overrideSelect as '1' | '2') : settings.activeShift;
 
-    onUpdateSettings({
+    const persisted = await onUpdateSettings({
       shift1Name: shift1,
       shift2Name: shift2,
       shift1Start,
@@ -52,10 +52,10 @@ export const StaffView: React.FC<StaffViewProps> = ({
       manualOverride: isManual,
       activeShift,
     });
-    onShowToast('Pengaturan shift dan kasir berhasil disimpan!', 'success');
+    if (persisted) onShowToast('Pengaturan shift dan kasir berhasil disimpan!', 'success');
   };
 
-  const handleAddStaff = (e: React.FormEvent) => {
+  const handleAddStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaffName.trim()) {
       onShowToast('Masukkan nama karyawan / staf!', 'error');
@@ -73,19 +73,20 @@ export const StaffView: React.FC<StaffViewProps> = ({
     roleStaff.push(newStaffName.trim());
     currentList[newStaffRole] = roleStaff;
 
-    onUpdateSettings({ staffList: currentList });
+    const persisted = await onUpdateSettings({ staffList: currentList });
+    if (!persisted) return;
     setNewStaffName('');
     onShowToast(`Karyawan "${newStaffName}" berhasil ditambahkan!`, 'success');
   };
 
-  const handleConfirmDeleteStaff = () => {
+  const handleConfirmDeleteStaff = async () => {
     if (!staffToDelete) return;
     const { role, name } = staffToDelete;
     const currentList = { ...settings.staffList };
     if (currentList[role]) {
       currentList[role] = currentList[role].filter((n) => n !== name);
-      onUpdateSettings({ staffList: currentList });
-      onShowToast(`Karyawan "${name}" berhasil dihapus dari ${role}!`, 'info');
+      const persisted = await onUpdateSettings({ staffList: currentList });
+      if (persisted) onShowToast(`Karyawan "${name}" berhasil dihapus dari ${role}!`, 'info');
     }
     setStaffToDelete(null);
   };
