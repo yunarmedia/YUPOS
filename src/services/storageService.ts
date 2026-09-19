@@ -87,8 +87,6 @@ function dedupeOrders(orders: Order[]): Order[] { const seen = new Set<string>()
 
 export function loadMerchantSettings(merchantId: string): StoreSettings { if (!merchantId) return { ...defaultSettings }; return mergeSettings(loadLocalData<StoreSettings>(getMerchantStorageKey(merchantId, 'default', 'settings'), defaultSettings)); }
 
-// Save helpers are cache-only by design. The cache is written only when explicitly requested
-// by hydration or after a successful Firestore write.
 export function saveMerchantSettings(merchantId: string, settings: StoreSettings, persistToCache = false): void {
   if (!merchantId || !persistToCache) return;
   saveLocalData(getMerchantStorageKey(merchantId, 'default', 'settings'), mergeSettings(settings));
@@ -134,15 +132,29 @@ function reportSettingsSyncFailure(
   error: any,
   stage: SettingsSyncFailure['stage']
 ): void {
-  if (!onError) return;
+  const failure = {
+    code: String(error?.code || 'unknown'),
+    message: String(error?.message || error || 'Unknown Firebase error'),
+    stage,
+  } as SettingsSyncFailure;
+
+  console.error('YUPOS settings sync diagnostic:', failure);
+
   try {
-    onError({
-      code: String(error?.code || 'unknown'),
-      message: String(error?.message || error || 'Unknown Firebase error'),
-      stage,
-    });
+    onError?.(failure);
   } catch {
     // Diagnostic callbacks must never break persistence.
+  }
+
+  // Temporary diagnostic surface: the current UI only shows a generic toast.
+  // This exposes the real Firebase stage/code/message so the root cause can be fixed
+  // instead of repeatedly guessing at the generic "save failed" state.
+  try {
+    if (typeof window !== 'undefined') {
+      window.alert(`YUPOS FIREBASE DIAGNOSTIC\nStage: ${failure.stage}\nCode: ${failure.code}\nMessage: ${failure.message}`);
+    }
+  } catch {
+    // Ignore browsers that block modal dialogs.
   }
 }
 
