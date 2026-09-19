@@ -300,59 +300,44 @@ export default function App() {
 
   // Handle Tab Navigation with PIN protection
   const handleSelectTab = (tabId: string) => {
+    const openProtectedTab = (targetTab: string, title: string, configuredPin?: string) => {
+      const pin = String(configuredPin || '').trim();
+      if (!pin) {
+        setActiveTab(targetTab);
+        return;
+      }
+
+      setTabAuthModal({
+        targetTab,
+        title,
+        expectedPin: pin,
+      });
+      setEnteredTabPin('');
+      setTabPinError(null);
+    };
+
     if (tabId === 'admin') {
-      const expected = settings.portalPins?.admin || '2024UDC';
-      setTabAuthModal({
-        targetTab: 'admin',
-        title: 'Otoritas Admin Kontrol',
-        expectedPin: expected,
-      });
-      setEnteredTabPin('');
-      setTabPinError(null);
+      openProtectedTab('admin', 'Otoritas Admin Kontrol', settings.portalPins?.admin);
       return;
     }
 
-    if (tabId === 'expenses' && settings.portalPins?.expenses) {
-      setTabAuthModal({
-        targetTab: 'expenses',
-        title: 'Sandi Portal Pengeluaran',
-        expectedPin: settings.portalPins.expenses,
-      });
-      setEnteredTabPin('');
-      setTabPinError(null);
+    if (tabId === 'expenses') {
+      openProtectedTab('expenses', 'Sandi Portal Pengeluaran', settings.portalPins?.expenses);
       return;
     }
 
-    if (tabId === 'inventory' && settings.portalPins?.inventory) {
-      setTabAuthModal({
-        targetTab: 'inventory',
-        title: 'Sandi Portal Produk & Jasa',
-        expectedPin: settings.portalPins.inventory,
-      });
-      setEnteredTabPin('');
-      setTabPinError(null);
+    if (tabId === 'inventory') {
+      openProtectedTab('inventory', 'Sandi Portal Produk & Jasa', settings.portalPins?.inventory);
       return;
     }
 
-    if (tabId === 'staff' && settings.portalPins?.staff) {
-      setTabAuthModal({
-        targetTab: 'staff',
-        title: 'Sandi Portal Karyawan & Shift',
-        expectedPin: settings.portalPins.staff,
-      });
-      setEnteredTabPin('');
-      setTabPinError(null);
+    if (tabId === 'staff') {
+      openProtectedTab('staff', 'Sandi Portal Karyawan & Shift', settings.portalPins?.staff);
       return;
     }
 
-    if (tabId === 'settings' && settings.portalPins?.settings) {
-      setTabAuthModal({
-        targetTab: 'settings',
-        title: 'Sandi Portal Pengaturan Sistem',
-        expectedPin: settings.portalPins.settings,
-      });
-      setEnteredTabPin('');
-      setTabPinError(null);
+    if (tabId === 'settings') {
+      openProtectedTab('settings', 'Sandi Portal Pengaturan Sistem', settings.portalPins?.settings);
       return;
     }
 
