@@ -30,6 +30,23 @@ function sanitizeFirestoreData<T>(value: T): T {
   return value;
 }
 
+function canonicalizeForComparison(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeForComparison);
+  if (value !== null && typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((result, key) => {
+        result[key] = canonicalizeForComparison((value as Record<string, unknown>)[key]);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function valuesMatchForFirestoreVerification(left: unknown, right: unknown): boolean {
+  return JSON.stringify(canonicalizeForComparison(left)) === JSON.stringify(canonicalizeForComparison(right));
+}
+
 function mergeSettings(saved: StoreSettings): StoreSettings {
   return { ...defaultSettings, ...saved, portalPins: { ...defaultSettings.portalPins, ...(saved.portalPins || {}) }, categories: Array.isArray(saved.categories) ? saved.categories : [], staffRoles: Array.isArray(saved.staffRoles) ? saved.staffRoles : [], staffList: saved.staffList && typeof saved.staffList === 'object' ? saved.staffList : {} };
 }
@@ -191,7 +208,7 @@ export function syncConfigToFirebase(
         }
         const verified = verifiedSnap.data() as Record<string, unknown>;
         for (const [key, value] of Object.entries(clean)) {
-          if (JSON.stringify(verified[key]) !== JSON.stringify(value)) {
+          if (!valuesMatchForFirestoreVerification(verified[key], value)) {
             throw new Error(`Firestore settings verification failed for field: ${key}`);
           }
         }
