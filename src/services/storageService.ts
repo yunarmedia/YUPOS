@@ -123,15 +123,38 @@ export function saveMerchantExpenses(merchantId: string, businessType: BusinessT
 export function loadMerchantPettyCash(merchantId: string, businessType: BusinessType): number { if (!merchantId) return 0; return loadLocalData<number>(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), 0); }
 export function saveMerchantPettyCash(merchantId: string, businessType: BusinessType, amount: number, persistToCache = false): void { if (!merchantId || !persistToCache) return; saveLocalData(getMerchantStorageKey(merchantId, businessType, 'pettyCash'), Number(amount) || 0); }
 
-export function syncConfigToFirebase(settings: StoreSettings, merchantId: string = ''): Promise<boolean> {
+export type SettingsSyncFailure = {
+  code: string;
+  message: string;
+  stage: 'auth' | 'write' | 'verify' | 'unknown';
+};
+
+function reportSettingsSyncFailure(
+  onError: ((failure: SettingsSyncFailure) => void) | undefined,
+  error: any,
+  stage: SettingsSyncFailure['stage']
+): void {
+  if (!onError) return;
+  try {
+    onError({
+      code: String(error?.code || 'unknown'),
+      message: String(error?.message || error || 'Unknown Firebase error'),
+      stage,
+    });
+  } catch {
+    // Diagnostic callbacks must never break persistence.
+  }
+}
+
+export function syncConfigToFirebase(
+  settings: StoreSettings,
+  merchantId: string = '',
+  onError?: (failure: SettingsSyncFailure) => void
+): Promise<boolean> {
   return enqueueSync(`settings:${merchantId}`, async () => {
     try {
       const id = requireMerchantId(merchantId);
       const clean = mergeSettings(sanitizeFirestoreData(settings));
-      // The local snapshot is durable and carries a monotonic timestamp so the
-      // next bootstrap can distinguish a newer unsynced local mutation from an
-      // older/stale Firestore snapshot. This removes the need for heuristic
-      // "richness" comparisons during normal operation.
       const previousMeta = readSettingsMeta(id);
       const updatedAt = Math.max(Date.now(), previousMeta.updatedAt + 1);
 
@@ -141,13 +164,14 @@ export function syncConfigToFirebase(settings: StoreSettings, merchantId: string
       const settingsRef = doc(db, 'yupos_config', id, 'settings', 'data');
       const payload = sanitizeFirestoreData({ ...clean, merchantId: id, updatedAt });
 
-      await setDoc(settingsRef, payload, { merge: true });
+      try {
+        await setDoc(settingsRef, payload, { merge: true });
+      } catch (writeError) {
+        console.error('Firebase settings write failed:', writeError);
+        reportSettingsSyncFailure(onError, writeError, 'write');
+        return false;
+      }
 
-      // Confirm the server copy when the network is available. Firestore can
-      // legitimately accept a write into its persistent local queue while the
-      // device is temporarily unable to perform a server read. That transient
-      // verification failure must not turn a successfully queued write into a
-      // false "save failed" state.
       try {
         const verifiedSnap = await getDocFromServer(settingsRef);
         if (!verifiedSnap.exists()) {
@@ -175,23 +199,19 @@ export function syncConfigToFirebase(settings: StoreSettings, merchantId: string
 
         if (!transient) {
           console.error('Firebase settings server verification failed:', verifyError);
+          reportSettingsSyncFailure(onError, verifyError, 'verify');
           return false;
         }
 
-        // The write is already accepted by Firestore's persistent client
-        // queue. Keep the durable local snapshot and let Firestore retry when
-        // connectivity is restored.
         console.warn('Firebase settings server verification deferred:', verifyError);
       }
 
-      // Cache is written before the cloud operation and remains the durable
-      // recovery snapshot. On a transient verification failure the queued
-      // Firestore write will still reconcile this snapshot once online.
       saveMerchantSettings(id, clean, true);
       writeSettingsMeta(id, updatedAt);
       return true;
     } catch (err) {
       console.error('Firebase config sync failed:', err);
+      reportSettingsSyncFailure(onError, err, 'auth');
       return false;
     }
   });
