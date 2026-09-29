@@ -147,7 +147,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
       const persisted = await onSaveCatalog(result.products, result.categories);
       if (!persisted) return;
       onShowToast(
-        \`Import selesai: \${result.created} dibuat, \${result.updated} diperbarui\${result.skipped ? \`, \${result.skipped} dilewati\` : ''}.\`,
+        `Import selesai: ${result.created} dibuat, ${result.updated} diperbarui${result.skipped ? `, ${result.skipped} dilewati` : ''}.`,
         result.skipped ? 'warning' : 'success'
       );
     } catch (error) {
