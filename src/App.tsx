@@ -14,6 +14,7 @@ import {
   Customer
 } from './types';
 import { BUSINESS_PRESETS } from './config/businessCategories';
+import { ProductItem } from './types';
 import { 
   defaultSettings,
   loadMerchantSettings,
