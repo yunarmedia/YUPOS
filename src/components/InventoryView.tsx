@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { 
   Package, 
   Plus, 
@@ -9,14 +9,19 @@ import {
   Store, 
   CheckCircle2, 
   XCircle,
-  Tag
+  Tag,
+  Download,
+  UploadCloud,
+  FileSpreadsheet
 } from 'lucide-react';
 import { ProductItem, ItemType, StoreSettings } from '../types';
+import { exportCatalogWorkbook, importCatalogWorkbook } from '../services/catalogExcelService';
 
 interface InventoryViewProps {
   products: ProductItem[];
   settings: StoreSettings;
   onSaveProduct: (product: Omit<ProductItem, 'id'>, id?: string) => void;
+  onSaveCatalog: (products: ProductItem[], categories: string[]) => Promise<boolean>;
   onDeleteProduct: (id: string) => void;
   onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
@@ -26,6 +31,7 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   settings,
   onSaveProduct,
   onDeleteProduct,
+  onSaveCatalog,
   onShowToast,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,6 +43,8 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
   const [available, setAvailable] = useState(true);
   const [stock, setStock] = useState('');
   const [searchKw, setSearchKw] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
 
   // Get active categories
   const categories = useMemo(() => {
@@ -114,6 +122,44 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     setStock('');
   };
 
+  const handleExportCatalog = () => {
+    try {
+      exportCatalogWorkbook(products, settings.categories, settings.businessType);
+      onShowToast('Katalog Excel berhasil diunduh (.xlsx).', 'success');
+    } catch (error) {
+      console.error('YUPOS catalog export failed:', error);
+      onShowToast('Gagal mengekspor katalog Excel.', 'error');
+    }
+  };
+
+  const handleImportCatalog = async (file: File) => {
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      onShowToast('Pilih file Excel (.xlsx / .xls).', 'error');
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const result = await importCatalogWorkbook(file, products, { businessType: settings.businessType, categories: settings.categories });
+      const hasCategoryChanges = result.categories.length !== settings.categories.length || result.categories.some((category) => !settings.categories.includes(category));
+      if (result.created === 0 && result.updated === 0 && !hasCategoryChanges) {
+        onShowToast(result.errors[0] || 'Tidak ada perubahan katalog yang valid untuk diimpor.', 'error');
+        return;
+      }
+      const persisted = await onSaveCatalog(result.products, result.categories);
+      if (!persisted) return;
+      onShowToast(
+        `Import selesai: ${result.created} dibuat, ${result.updated} diperbarui${result.skipped ? `, ${result.skipped} dilewati` : ''}${hasCategoryChanges ? ', kategori diperbarui' : ''}.`,
+        result.skipped ? 'warning' : 'success'
+      );
+    } catch (error) {
+      console.error('YUPOS catalog import failed:', error);
+      onShowToast(error instanceof Error ? error.message : 'Gagal mengimpor katalog Excel.', 'error');
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
   const filteredProducts = products.filter((p) => {
     if (p.deleted) return false;
     if (p.businessType && p.businessType !== settings.businessType) return false;
@@ -132,6 +178,23 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
         <p className="text-xs text-slate-500 font-semibold mt-0.5">
           Kelola katalog jasa layanan dan produk fisik yang dijual di kasir secara terpusat.
         </p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600"><FileSpreadsheet className="w-5 h-5" /></div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900">Import / Export Katalog Excel</h3>
+              <p className="text-[11px] text-slate-500 font-medium mt-0.5">Produk, Item/Menu, dan Kategori dalam satu workbook .xlsx.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 shrink-0">
+            <input ref={importInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void handleImportCatalog(file); }} />
+            <button type="button" onClick={() => importInputRef.current?.click()} disabled={isImporting} className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl text-xs font-black flex items-center gap-1.5"><UploadCloud className="w-3.5 h-3.5" />{isImporting ? 'Memproses...' : 'Import Excel'}</button>
+            <button type="button" onClick={handleExportCatalog} className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center gap-1.5"><Download className="w-3.5 h-3.5" />Export Excel</button>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -646,6 +646,53 @@ export default function App() {
     return true;
   };
 
+  // Bulk catalog persistence for Excel import. Uses the same merchant/businessType
+  // isolation and sync queue as normal product CRUD.
+  const handleSaveCatalog = async (catalogProducts: ProductItem[], categories: string[]): Promise<boolean> => {
+    const currentMId = requireMerchantId();
+    if (!currentMId) return false;
+    const currentBType = settings.businessType;
+    const normalized = catalogProducts
+      .filter((product) => product && !product.deleted)
+      .map((product) => ({
+        ...product,
+        id: String(product.id || '').trim() || ('PRD-' + Date.now().toString(36).toUpperCase()),
+        name: String(product.name || '').trim(),
+        category: String(product.category || 'Umum').trim() || 'Umum',
+        price: Math.max(0, Number(product.price) || 0),
+        type: product.type === 'service' ? 'service' : 'product',
+        reqStaffRole: String(product.reqStaffRole || 'Kasir').trim() || 'Kasir',
+        available: Boolean(product.available),
+        merchantId: currentMId,
+        businessType: currentBType,
+      } satisfies ProductItem));
+
+    if (!normalized.length) {
+      showToast('Tidak ada produk valid untuk disimpan.', 'error');
+      return false;
+    }
+
+    const nextSettings = {
+      ...loadMerchantSettings(currentMId),
+      categories: Array.from(new Set(categories.map((category) => String(category).trim()).filter(Boolean))),
+    };
+
+    const productsPersisted = await syncProductsToFirebase(normalized, currentMId, currentBType);
+    if (!productsPersisted) {
+      showToast('Gagal menyimpan katalog Excel ke cloud. Data katalog tidak diubah.', 'error');
+      return false;
+    }
+
+    const settingsPersisted = await syncConfigToFirebase(nextSettings, currentMId);
+    if (!settingsPersisted) {
+      showToast('Katalog tersimpan, tetapi sinkronisasi kategori gagal.', 'warning');
+    }
+
+    setProducts(normalized);
+    setSettings(nextSettings);
+    return true;
+  };
+
   // Product CRUD strictly scoped to active merchant & businessType
   const handleSaveProduct = async (prodData: Omit<ProductItem, 'id'>, id?: string) => {
     const currentMId = requireMerchantId();
@@ -982,6 +1029,7 @@ export default function App() {
             products={products}
             settings={settings}
             onSaveProduct={handleSaveProduct}
+            onSaveCatalog={handleSaveCatalog}
             onDeleteProduct={handleDeleteProduct}
             onShowToast={showToast}
           />
