@@ -139,15 +139,16 @@ export const InventoryView: React.FC<InventoryViewProps> = ({
     }
     setIsImporting(true);
     try {
-      const result = await importCatalogWorkbook(file, products, { businessType: settings.businessType });
-      if (result.created === 0 && result.updated === 0) {
-        onShowToast(result.errors[0] || 'Tidak ada data katalog yang valid untuk diimpor.', 'error');
+      const result = await importCatalogWorkbook(file, products, { businessType: settings.businessType, categories: settings.categories });
+      const hasCategoryChanges = result.categories.length !== settings.categories.length || result.categories.some((category) => !settings.categories.includes(category));
+      if (result.created === 0 && result.updated === 0 && !hasCategoryChanges) {
+        onShowToast(result.errors[0] || 'Tidak ada perubahan katalog yang valid untuk diimpor.', 'error');
         return;
       }
       const persisted = await onSaveCatalog(result.products, result.categories);
       if (!persisted) return;
       onShowToast(
-        `Import selesai: ${result.created} dibuat, ${result.updated} diperbarui${result.skipped ? `, ${result.skipped} dilewati` : ''}.`,
+        `Import selesai: ${result.created} dibuat, ${result.updated} diperbarui${result.skipped ? `, ${result.skipped} dilewati` : ''}${hasCategoryChanges ? ', kategori diperbarui' : ''}.`,
         result.skipped ? 'warning' : 'success'
       );
     } catch (error) {
