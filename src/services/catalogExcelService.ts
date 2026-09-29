@@ -312,5 +312,24 @@ export function exportCatalogWorkbook(
   append('Item/Menu', itemRows);
   append('Template Import', templateRows);
 
-  XLSX.writeFile(wb, `YUPOS_Katalog_${new Date().toISOString().split('T')[0]}.xlsx`);
+  const fileName = `YUPOS_Katalog_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const output = XLSX.write(wb, { bookType: 'xlsx', type: 'array', compression: true });
+  const blob = new Blob([output], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+
+  // Explicit browser download is more reliable on Android/Chrome than writeFile().
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.rel = 'noopener';
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  try {
+    anchor.click();
+  } finally {
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
 }
