@@ -80,11 +80,19 @@ const sanitizeSku = (value: unknown): string => normalizeText(value).slice(0, 80
 const createProductId = (): string =>
   `PRD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 
-function rowsFromWorkbook(workbook: XLSX.WorkBook): { rows: Record<string, unknown>[]; sheetName: string } {
+function rowsFromWorkbook(workbook: XLSX.WorkBook): { rows: Record<string, unknown>[]; sheetName: string; categories: string[] } {
   const preferred = ['Item', 'Menu', 'Produk', 'Products', 'Catalog', 'Template Import'];
   const candidates = [...preferred, ...workbook.SheetNames].filter((name, index, arr) => arr.indexOf(name) === index);
   const sheetName = candidates.find((name) => workbook.Sheets[name]) || workbook.SheetNames[0];
   if (!sheetName) throw new Error('Workbook Excel tidak memiliki sheet.');
+
+  const categorySheet = workbook.Sheets['Kategori'];
+  const importedCategories = categorySheet
+    ? XLSX.utils.sheet_to_json<unknown[]>(categorySheet, { header: 1, defval: null, raw: true })
+        .slice(1)
+        .map((row) => sanitizeCategory(Array.isArray(row) ? row[1] : ''))
+        .filter(Boolean)
+    : [];
 
   const sheet = workbook.Sheets[sheetName];
   const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, raw: true });
@@ -99,6 +107,7 @@ function rowsFromWorkbook(workbook: XLSX.WorkBook): { rows: Record<string, unkno
 
   return {
     sheetName,
+    categories: importedCategories,
     rows: matrix.slice(headerIndex + 1)
       .filter((row) => Array.isArray(row) && row.some((cell) => normalizeText(cell) !== ''))
       .map((row) => {
@@ -114,7 +123,7 @@ function rowsFromWorkbook(workbook: XLSX.WorkBook): { rows: Record<string, unkno
 export function importCatalogWorkbook(
   file: File,
   existingProducts: ProductItem[],
-  settings: { businessType: ProductItem['businessType'] },
+  settings: { businessType: ProductItem['businessType']; categories?: string[] },
 ): Promise<CatalogImportResult> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -126,10 +135,11 @@ export function importCatalogWorkbook(
         if (!(data instanceof ArrayBuffer)) throw new Error('Format file Excel tidak dapat dibaca.');
 
         const workbook = XLSX.read(data, { type: 'array', cellDates: false });
-        const { rows } = rowsFromWorkbook(workbook);
+        const { rows, categories: workbookCategories } = rowsFromWorkbook(workbook);
 
         const next = [...existingProducts];
-        const categories = new Set<string>();
+        const categories = new Set<string>(settings.categories || []);
+        workbookCategories.forEach((category) => categories.add(category));
         let created = 0;
         let updated = 0;
         let skipped = 0;
