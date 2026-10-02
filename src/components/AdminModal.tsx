@@ -2,24 +2,55 @@ import React, { useEffect, useState } from 'react';
 import { ShieldCheck, Lock, KeyRound, ShieldAlert, FileText, Trash2, Edit3, Plus, CreditCard, Users, BarChart3, Settings, Printer, Package, Wallet, Database } from 'lucide-react';
 import { StoreSettings, PortalPins } from '../types';
 
-interface AdminModalProps { settings: StoreSettings; onUpdatePins: (pins: PortalPins) => void; onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void; }
+interface AdminModalProps {
+  settings: StoreSettings;
+  onUpdateSettings: (settings: StoreSettings) => Promise<boolean>;
+  onShowToast: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+}
 const METHODS_KEY_SUFFIX = '_custom_payment_methods';
 const getMerchantId = () => { try { const session = JSON.parse(localStorage.getItem('yupos_merchant_session') || 'null'); return String(session?.uid || '').trim(); } catch { return ''; } };
 const loadCustomMethods = (settings: StoreSettings): string[] => { const uid = getMerchantId(); try { const stored = uid ? JSON.parse(localStorage.getItem(`yupos_${uid}${METHODS_KEY_SUFFIX}`) || 'null') : null; if (Array.isArray(stored)) return Array.from(new Set(stored.map((v) => String(v).trim()).filter(Boolean))).slice(0, 30); } catch { /* fallback */ } return Array.from(new Set((settings.customPaymentMethods || []).map((v) => String(v).trim()).filter(Boolean))).slice(0, 30); };
 
-export const AdminModal: React.FC<AdminModalProps> = ({ settings, onUpdatePins, onShowToast }) => {
+export const AdminModal: React.FC<AdminModalProps> = ({ settings, onUpdateSettings, onShowToast }) => {
   const [pins, setPins] = useState<PortalPins>({ admin: settings.portalPins?.admin || '', pos: settings.portalPins?.pos || '', customers: settings.portalPins?.customers || '', revenue: settings.portalPins?.revenue || '', extract: settings.portalPins?.extract || '', expenses: settings.portalPins?.expenses || '', inventory: settings.portalPins?.inventory || '', history: settings.portalPins?.history || '', staff: settings.portalPins?.staff || '', printer: settings.portalPins?.printer || '', settings: settings.portalPins?.settings || '', historyDeletePin: settings.portalPins?.historyDeletePin || '', historyEditPin: settings.portalPins?.historyEditPin || '', historyCancelPin: settings.portalPins?.historyCancelPin || '', productEditPin: settings.portalPins?.productEditPin || '', productDeletePin: settings.portalPins?.productDeletePin || '', customerEditPin: settings.portalPins?.customerEditPin || '', customerDeletePin: settings.portalPins?.customerDeletePin || '', expenseEditPin: settings.portalPins?.expenseEditPin || '', expenseDeletePin: settings.portalPins?.expenseDeletePin || '', customPaymentPin: settings.portalPins?.customPaymentPin || '' });
   const [customMethods, setCustomMethods] = useState<string[]>(() => loadCustomMethods(settings));
   const [newMethod, setNewMethod] = useState('');
   useEffect(() => { setCustomMethods(loadCustomMethods(settings)); }, [settings]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const normalizedMethods = Array.from(new Set(customMethods.map((v) => v.trim().replace(/\s+/g, ' ')).filter(Boolean))).slice(0, 30);
+
+    const normalizedMethods = Array.from(
+      new Set(customMethods.map((v) => v.trim().replace(/\s+/g, ' ')).filter(Boolean)),
+    ).slice(0, 30);
+
+    const nextSettings: StoreSettings = {
+      ...settings,
+      portalPins: pins,
+      customPaymentMethods: normalizedMethods,
+    };
+
+    // Firestore is the commit point. The parent updates local cache only
+    // after the cloud write and verification succeed.
+    const persisted = await onUpdateSettings(nextSettings);
+
+    if (!persisted) {
+      onShowToast('Gagal menyimpan otoritas. Perubahan tidak diterapkan.', 'error');
+      return;
+    }
+
     const uid = getMerchantId();
-    const nextSettings = { ...settings, portalPins: pins, customPaymentMethods: normalizedMethods };
-    if (uid) { localStorage.setItem(`yupos_${uid}${METHODS_KEY_SUFFIX}`, JSON.stringify(normalizedMethods)); localStorage.setItem(`yupos_${uid}_settings`, JSON.stringify(nextSettings)); localStorage.setItem('yupos_settings', JSON.stringify(nextSettings)); }
-    onUpdatePins(pins);
+    if (uid) {
+      try {
+        localStorage.setItem(
+          `yupos_${uid}${METHODS_KEY_SUFFIX}`,
+          JSON.stringify(normalizedMethods),
+        );
+      } catch (error) {
+        console.warn('Custom payment method cache write failed:', error);
+      }
+    }
+
     onShowToast('Seluruh PIN otoritas dan metode pembayaran custom berhasil disimpan!', 'success');
   };
   const handleAddMethod = () => { const normalized = newMethod.trim().replace(/\s+/g, ' ').slice(0, 40); if (!normalized) return; if (customMethods.some((m) => m.toLowerCase() === normalized.toLowerCase())) { onShowToast('Metode pembayaran tersebut sudah ada.', 'warning'); return; } if (customMethods.length >= 30) { onShowToast('Maksimal 30 metode pembayaran custom.', 'warning'); return; } setCustomMethods((prev) => [...prev, normalized]); setNewMethod(''); };
