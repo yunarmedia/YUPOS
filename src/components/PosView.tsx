@@ -240,7 +240,7 @@ export const PosView: React.FC<PosViewProps> = ({
       </div>
 
       <div className={`yupos-pos-cart w-full lg:w-[420px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col h-full shrink-0 shadow-xl overflow-hidden ${mobileTab === 'catalog' ? 'hidden lg:flex' : 'flex'}`}>
-        <div className="p-3.5 sm:p-4 border-b border-slate-200 bg-slate-50/90 shrink-0">
+        <div className="yupos-pos-cart-header p-3.5 sm:p-4 border-b border-slate-200 bg-slate-50/90 shrink-0">
           {editingOrder && <div className="mb-2.5 p-2 bg-amber-100 border border-amber-300 rounded-xl flex items-center justify-between text-xs text-amber-950 font-black"><span>Mode Edit: #{editingOrder.id}</span>{onCancelEditOrder && <button type="button" onClick={onCancelEditOrder} className="px-2 py-0.5 bg-white text-blue-600 rounded-lg text-[10px] font-black border border-amber-300">Batal Edit</button>}</div>}
           <div className="flex items-center justify-between mb-3"><div className="flex items-center gap-2"><button type="button" onClick={() => setMobileTab('catalog')} className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700">← Menu</button><h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5"><Receipt className="w-4 h-4 text-blue-600" />{editingOrder ? `Rincian Edit: #${editingOrder.id}` : 'Keranjang Kasir'}</h3></div><span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[11px] font-extrabold">{cart.reduce((s, i) => s + i.qty, 0)} item</span></div>
 
@@ -251,7 +251,7 @@ export const PosView: React.FC<PosViewProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3">
+        <div className="yupos-pos-cart-items flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 space-y-3">
           {cart.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center text-slate-400 py-12"><Receipt className="w-12 h-12 mb-2 stroke-1 text-slate-300" /><p className="text-xs font-bold text-slate-500">Keranjang masih kosong</p><p className="text-[11px] mt-1">Pilih menu atau layanan di sebelah kiri.</p></div> : cart.map((item, index) => {
             const charge = isAdditionalCharge(item);
             const staffOptions = getStaffOptions(item.reqStaffRole);
@@ -262,7 +262,7 @@ export const PosView: React.FC<PosViewProps> = ({
           })}
         </div>
 
-        <div className="p-3.5 sm:p-4 border-t border-slate-200 bg-slate-50/90 space-y-3 shrink-0">
+        <div className="yupos-pos-cart-footer p-3.5 sm:p-4 border-t border-slate-200 bg-slate-50/90 space-y-3 shrink-0">
           <button type="button" onClick={() => setShowAdditionalCharge(true)} className="w-full py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-black flex items-center justify-center gap-1.5"><WalletCards className="w-4 h-4" />+ BIAYA TAMBAHAN</button>
           <div className="space-y-1.5 text-xs"><div className="flex justify-between text-slate-500"><span>Subtotal</span><span className="font-bold text-slate-800">{formatRp(subtotal)}</span></div><div className="flex items-center justify-between py-1"><span className="text-slate-500">Diskon / Potongan</span><div className="flex items-center gap-1.5"><div className="flex bg-white rounded-lg border p-0.5"><button type="button" onClick={() => setDiscountType('Rp')} className={`px-1.5 py-0.5 rounded text-[10px] font-black ${discountType === 'Rp' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Rp</button><button type="button" onClick={() => setDiscountType('%')} className={`px-1.5 py-0.5 rounded text-[10px] font-black ${discountType === '%' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>%</button></div><input type="number" min="0" value={discountValue || ''} onChange={(e) => setDiscountValue(Number(e.target.value) || 0)} placeholder="0" className="w-20 px-2 py-0.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-right" />{discountAmount > 0 && <span className="text-red-600 font-black text-xs">-{formatRp(discountAmount)}</span>}</div></div>{settings.ppnEnabled && <div className="flex justify-between text-emerald-700 font-semibold"><span>PPN ({settings.ppnRate || 11}%)</span><span>+{formatRp(ppnAmount)}</span></div>}<div className="flex justify-between items-baseline pt-2 border-t border-slate-200"><span className="font-extrabold text-sm text-slate-900">Total Tagihan</span><span className="font-black text-xl text-blue-600">{formatRp(finalTotal)}</span></div></div>
           <div className="grid grid-cols-2 gap-2 pt-1"><button onClick={() => handleCheckout('pending', 'Pending')} disabled={!cart.length} className="py-2 px-3 bg-amber-500/10 text-amber-700 border border-amber-300 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 disabled:opacity-50"><PauseCircle className="w-4 h-4" />GANTUNG / ANTRIAN</button><button onClick={handleTriggerPrintBill} disabled={!cart.length} className="py-2 px-3 bg-slate-200 text-slate-800 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 disabled:opacity-50"><Printer className="w-4 h-4" />PRINT BILL</button></div>
