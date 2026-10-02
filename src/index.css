@@ -142,6 +142,52 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet: keep the cart usable within the viewport instead of letting
+     the customer form push the payment controls below the screen. */
+  .yupos-pos-shell .yupos-pos-cart {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header {
+    flex: 0 1 auto !important;
+    max-height: 235px !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-items {
+    flex: 1 1 auto !important;
+    min-height: 70px !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer {
+    flex: 0 0 auto !important;
+    max-height: 315px !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header input,
+  .yupos-pos-shell .yupos-pos-cart-header select {
+    min-height: 34px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer button {
+    min-height: 38px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer .text-xl {
+    font-size: 1.05rem !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
   /* Tablet POS: keep catalog and cart visible side-by-side, like a desktop POS. */
   .yupos-pos-shell {
     flex-direction: row !important;
