@@ -1064,6 +1064,14 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'admin' && (
+          <AdminModal
+            settings={settings}
+            onUpdateSettings={handleUpdateSettings}
+            onShowToast={showToast}
+          />
+        )}
+
         {activeTab === 'printer' && (
           <PrinterView
             settings={settings}
