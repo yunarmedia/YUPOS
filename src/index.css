@@ -207,9 +207,8 @@ button, input, select, textarea { font-family: inherit; }
     min-height: 40px;
   }
 
-  /* Compact separate-cart tablet layout:
-     customer/payment stay compact while the selected-item area gets
-     the flexible middle space. */
+  /* Tablet cart: keep the original separate-cart workflow, but give the
+     checkout footer enough room to remain fully visible at 800x1280. */
   .yupos-pos-shell .yupos-pos-cart {
     min-height: 0 !important;
     overflow: hidden !important;
@@ -217,68 +216,87 @@ button, input, select, textarea { font-family: inherit; }
 
   .yupos-pos-shell .yupos-pos-cart-header {
     flex: 0 0 auto !important;
-    max-height: 250px !important;
+    max-height: 230px !important;
     overflow-y: auto !important;
-    padding: .65rem .75rem !important;
+    padding: .7rem .8rem !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-header > .space-y-2 {
-    gap: .4rem !important;
+    gap: .45rem !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-header .p-3 {
-    padding: .55rem !important;
+    padding: .6rem !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-header input,
   .yupos-pos-shell .yupos-pos-cart-header select {
-    min-height: 30px !important;
-    height: 30px !important;
-    padding-top: .3rem !important;
-    padding-bottom: .3rem !important;
+    min-height: 34px !important;
+    height: 34px !important;
+    padding-top: .35rem !important;
+    padding-bottom: .35rem !important;
     font-size: 12px !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-header label {
-    font-size: 9px !important;
+    font-size: 9.5px !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-header button {
-    min-height: 30px !important;
-    padding-top: .3rem !important;
-    padding-bottom: .3rem !important;
+    min-height: 34px !important;
+    padding-top: .35rem !important;
+    padding-bottom: .35rem !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-items {
     flex: 1 1 auto !important;
-    min-height: 110px !important;
+    min-height: 0 !important;
     overflow-y: auto !important;
-    padding: .6rem .75rem !important;
+    padding: .7rem .8rem !important;
     overscroll-behavior: contain;
   }
 
+  /* The payment/discount section must stay on-screen instead of being
+     clipped inside a 220px scroll box. */
   .yupos-pos-shell .yupos-pos-cart-footer {
     flex: 0 0 auto !important;
-    padding: .6rem .75rem !important;
-    gap: .5rem !important;
-    max-height: 220px !important;
-    overflow-y: auto !important;
+    min-height: 310px !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding: .8rem .8rem calc(.8rem + env(safe-area-inset-bottom)) !important;
+    gap: .55rem !important;
   }
 
-  .yupos-pos-shell .yupos-pos-cart-footer > button,
+  .yupos-pos-shell .yupos-pos-cart-footer > button {
+    min-height: 40px !important;
+    padding: .55rem .75rem !important;
+    font-size: 11px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer .grid {
+    gap: .45rem !important;
+  }
+
   .yupos-pos-shell .yupos-pos-cart-footer .grid button {
+    min-height: 40px !important;
+    padding: .5rem .55rem !important;
+    font-size: 11px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer input {
     min-height: 34px !important;
-    padding-top: .35rem !important;
-    padding-bottom: .35rem !important;
-    font-size: 10px !important;
+    height: 34px !important;
+    font-size: 12px !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart-footer .text-xl {
-    font-size: 1.05rem !important;
+    font-size: 1.2rem !important;
   }
 
-  /* When the cart is empty, don't let the empty-state consume the
-     flexible item area with a giant centered block. */
+  .yupos-pos-shell .yupos-pos-cart-footer .text-sm {
+    font-size: .9rem !important;
+  }
+
   .yupos-pos-shell .yupos-pos-cart-items > .h-full {
     min-height: 0 !important;
     height: auto !important;
