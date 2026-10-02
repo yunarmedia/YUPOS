@@ -122,15 +122,46 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
     const localSettings = readLocal<JsonRecord>(`yupos_${merchantId}_settings`, {});
     const cloudSettings = settingsSnap.exists() ? (settingsSnap.data() || {}) : {};
     const mergedResult = mergeSettings(localSettings, cloudSettings, merchantId);
-    const mergedSettings = mergedResult.settings;
 
     const localBusinessType = String(localSettings.businessType || '').trim();
-    const businessType = String(mergedSettings.businessType || localBusinessType || 'custom');
-
-    // If local contains richer business configuration than the cloud snapshot,
-    // repair the cloud document before continuing.
+    const cloudBusinessType = String(cloudSettings.businessType || '').trim();
     const localTimestamp = localUpdatedAt(merchantId);
     const cloudTimestamp = cloudUpdatedAt(cloudSettings.updatedAt);
+
+    // If the local cache has no persistence metadata (legacy YUPOS versions)
+    // and already contains business data, do not let a stale/default cloud
+    // businessType redirect the app into an empty namespace.
+    const hasLocalBusinessData = localBusinessType
+      ? ['products', 'orders', 'expenses', 'pettyCash'].some((dataType) => {
+          try {
+            const key = `yupos_${merchantId}_${localBusinessType}_${dataType}`;
+            return localStorage.getItem(key) !== null;
+          } catch {
+            return false;
+          }
+        })
+      : false;
+
+    let businessType = String(mergedResult.settings.businessType || localBusinessType || cloudBusinessType || 'custom');
+
+    if (
+      localTimestamp === 0 &&
+      hasLocalBusinessData &&
+      localBusinessType &&
+      cloudBusinessType &&
+      cloudBusinessType !== localBusinessType
+    ) {
+      businessType = localBusinessType;
+    }
+
+    const mergedSettings: JsonRecord = {
+      ...mergedResult.settings,
+      businessType,
+    };
+
+    // If local contains the authoritative snapshot, repair Firestore with the
+    // complete normalized document. Never use merge here: stale fields from a
+    // previous schema must not survive a settings repair.
     const repairSettings =
       Object.keys(localSettings).length > 0 &&
       (!settingsSnap.exists() || mergedResult.preferLocal || localTimestamp > cloudTimestamp);
@@ -139,11 +170,18 @@ export async function hydrateMerchantDataFromFirebase(uid: string): Promise<bool
       const repairUpdatedAt = Math.max(localTimestamp, Date.now());
       await setDoc(
         settingsRef,
-        { ...localSettings, merchantId, updatedAt: repairUpdatedAt },
-        { merge: true },
+        {
+          ...mergedSettings,
+          merchantId,
+          updatedAt: repairUpdatedAt,
+        },
       );
+
       try {
-        localStorage.setItem(`yupos_${merchantId}_settings_meta`, JSON.stringify({ updatedAt: repairUpdatedAt }));
+        localStorage.setItem(
+          `yupos_${merchantId}_settings_meta`,
+          JSON.stringify({ updatedAt: repairUpdatedAt }),
+        );
       } catch (error) {
         console.warn('Merchant settings metadata repair failed:', error);
       }
