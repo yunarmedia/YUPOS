@@ -95,7 +95,8 @@ button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 /* =========================================================
    YUPOS RESPONSIVE SYSTEM
    Phone < 768 | Tablet 768-1023 | Desktop >= 1024
-   Large tablet / landscape POS optimisation: 900-1023
+   Tablet landscape gets the full POS workspace even when Android
+   reports a reduced CSS viewport because of display scaling.
    ========================================================= */
 
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -105,9 +106,8 @@ button, input, select, textarea { font-family: inherit; }
 .yupos-workspace { min-width: 0; width: 100%; }
 .yupos-sidebar { overscroll-behavior: contain; scrollbar-width: thin; }
 
-@media (max-width: 1023px) {
-  /* Tablets use the same drawer navigation as phones so portrait tablets
-     never lose workspace width to a permanent 256px sidebar. */
+/* Small phones/tablets in portrait: drawer navigation. */
+@media (max-width: 767px) {
   .yupos-sidebar {
     position: fixed !important;
     inset: 0 auto 0 0 !important;
@@ -120,31 +120,43 @@ button, input, select, textarea { font-family: inherit; }
   }
   .yupos-sidebar.translate-x-0 { transform: translateX(0) !important; }
   .yupos-sidebar-overlay { display: block !important; z-index: 60 !important; }
-  .yupos-mobile-header { display: flex !important; min-height: 52px; padding-top: max(.625rem, env(safe-area-inset-top)); }
+  .yupos-mobile-header {
+    display: flex !important;
+    min-height: 52px;
+    padding-top: max(.625rem, env(safe-area-inset-top));
+  }
   .yupos-workspace { width: 100%; max-width: 100%; }
 }
 
-@media (max-width: 899px) {
-  .yupos-pos-shell { min-width: 0; }
-  .yupos-pos-catalog, .yupos-pos-cart { min-width: 0; }
-  .yupos-pos-catalog { padding-left: max(.75rem, env(safe-area-inset-left)); padding-right: max(.75rem, env(safe-area-inset-right)); }
-  .yupos-pos-cart { padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+/* Tablet landscape / wide tablet:
+   use the real POS workspace even if Android reports <1024 CSS px.
+   Orientation is intentionally used here so tablet landscape does not
+   collapse into the phone layout. */
+@media (min-width: 768px) and (orientation: landscape) {
+  .yupos-sidebar {
+    position: static !important;
+    inset: auto !important;
+    width: 16rem !important;
+    max-width: 16rem !important;
+    height: 100% !important;
+    transform: none !important;
+    flex: 0 0 16rem !important;
+    z-index: 40 !important;
+    box-shadow: none !important;
+  }
 
-  /* Comfortable touch targets without making the compact POS look oversized. */
-  .yupos-pos-shell button { min-height: 40px; }
-  .yupos-pos-shell input,
-  .yupos-pos-shell select,
-  .yupos-pos-shell textarea { min-width: 0; }
+  .yupos-sidebar-overlay,
+  .yupos-mobile-header {
+    display: none !important;
+  }
 
-  .yupos-pos-mobile-tabs { position: sticky; top: 0; z-index: 10; }
-  .yupos-pos-catalog > .flex.flex-col.sm\\:flex-row { gap: .55rem; }
-  .yupos-pos-catalog .grid { min-width: 0; }
-}
+  .yupos-workspace {
+    width: auto !important;
+    max-width: none !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+  }
 
-@media (min-width: 768px) and (max-width: 1023px) {
-  /* Tablet POS: full-height split workspace.
-     The cart uses a fixed, practical width and a 3-row grid so the
-     customer section, item list, and payment footer never overlap. */
   .yupos-pos-shell {
     flex-direction: row !important;
     height: 100% !important;
@@ -167,9 +179,9 @@ button, input, select, textarea { font-family: inherit; }
   .yupos-pos-shell .yupos-pos-cart {
     display: grid !important;
     grid-template-rows: auto minmax(0, 1fr) auto !important;
-    flex: 0 0 clamp(400px, 31vw, 470px) !important;
-    width: clamp(400px, 31vw, 470px) !important;
-    max-width: none !important;
+    flex: 0 0 clamp(340px, 34vw, 430px) !important;
+    width: clamp(340px, 34vw, 430px) !important;
+    max-width: 42vw !important;
     height: 100% !important;
     min-height: 0 !important;
     overflow: hidden !important;
@@ -200,63 +212,101 @@ button, input, select, textarea { font-family: inherit; }
     padding-bottom: max(.75rem, env(safe-area-inset-bottom)) !important;
   }
 
-  .yupos-pos-shell .yupos-pos-cart-header input,
-  .yupos-pos-shell .yupos-pos-cart-header select {
-    min-height: 34px !important;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-footer button {
-    min-height: 38px !important;
-  }
-
   .yupos-pos-shell .yupos-pos-catalog .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: .65rem;
   }
+}
 
-  .yupos-pos-shell .yupos-pos-catalog > .flex.flex-col.sm\\:flex-row {
-    gap: .55rem;
+/* Tablet portrait: compact drawer + single workspace. */
+@media (min-width: 768px) and (orientation: portrait) and (max-width: 1023px) {
+  .yupos-sidebar {
+    position: fixed !important;
+    inset: 0 auto 0 0 !important;
+    width: min(70vw, 290px) !important;
+    max-width: 290px !important;
+    height: 100dvh !important;
+    transform: translateX(-100%) !important;
+    z-index: 70 !important;
+  }
+
+  .yupos-sidebar.translate-x-0 { transform: translateX(0) !important; }
+  .yupos-sidebar-overlay { display: block !important; z-index: 60 !important; }
+  .yupos-mobile-header {
+    display: flex !important;
+    min-height: 52px;
+    padding-top: max(.625rem, env(safe-area-inset-top));
+  }
+
+  .yupos-pos-shell { min-width: 0; }
+  .yupos-pos-mobile-tabs { display: flex !important; }
+  .yupos-pos-shell .yupos-pos-catalog,
+  .yupos-pos-shell .yupos-pos-cart {
+    width: 100%;
   }
 }
 
+/* Phone-specific spacing/touch guardrails. */
 @media (max-width: 767px) {
-  .yupos-mobile-header { padding-left: max(.75rem, env(safe-area-inset-left)); padding-right: max(.75rem, env(safe-area-inset-right)); }
+  .yupos-mobile-header {
+    padding-left: max(.75rem, env(safe-area-inset-left));
+    padding-right: max(.75rem, env(safe-area-inset-right));
+  }
   .yupos-mobile-header button { min-height: 40px; min-width: 40px; }
   .yupos-pos-shell { padding-bottom: env(safe-area-inset-bottom); }
-
-  /* Prevent narrow phone layouts from being squeezed by long labels. */
   .yupos-pos-shell .text-xs,
   .yupos-pos-shell .text-\\[11px\\],
   .yupos-pos-shell .text-\\[10px\\] { overflow-wrap: anywhere; }
-
-  /* 16px form controls prevent mobile browser auto-zoom while typing. */
   .yupos-pos-shell input,
   .yupos-pos-shell select,
   .yupos-pos-shell textarea { font-size: 16px !important; }
-
   .yupos-pos-shell .yupos-pos-cart { width: 100%; }
-  .yupos-pos-shell .yupos-pos-catalog .grid { gap: .6rem; }
-  .yupos-pos-shell .yupos-pos-catalog .grid > button { min-height: 116px; padding: .75rem; }
+  .yupos-pos-shell .yupos-pos-catalog .grid {
+    gap: .6rem;
+  }
+  .yupos-pos-shell .yupos-pos-catalog .grid > button {
+    min-height: 108px;
+  }
 }
 
-@media (max-width: 420px) {
-  .yupos-mobile-header { min-height: 50px; }
-  .yupos-pos-shell .yupos-pos-catalog { padding-top: .625rem; }
-  .yupos-pos-shell .yupos-pos-catalog .grid > button { min-height: 108px; }
-  .yupos-pos-shell .yupos-pos-cart > div:last-child { padding-left: .75rem; padding-right: .75rem; }
+/* Landscape tablets with shorter heights need compact, but never
+   clipped, cart controls. */
+@media (min-width: 768px) and (orientation: landscape) and (max-height: 820px) {
+  .yupos-pos-shell .yupos-pos-cart-header {
+    padding: .65rem !important;
+  }
+  .yupos-pos-shell .yupos-pos-cart-items {
+    padding: .65rem !important;
+  }
+  .yupos-pos-shell .yupos-pos-cart-footer {
+    padding: .65rem !important;
+    gap: .55rem !important;
+  }
+  .yupos-pos-shell .yupos-pos-cart-footer button {
+    min-height: 34px !important;
+  }
 }
 
-/* Shared responsive guardrails for every portal/view. */
+/* Shared responsive guardrails. */
 @media (max-width: 1023px) {
-  .max-w-7xl { width: 100%; max-width: 100%; min-width: 0; }
+  .max-w-7xl {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
   .max-w-7xl > * { min-width: 0; }
   .max-w-7xl .overflow-x-auto,
-  .max-w-7xl [class*="overflow-auto"] { max-width: 100%; -webkit-overflow-scrolling: touch; }
+  .max-w-7xl [class*="overflow-auto"] {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 @media (min-width: 1024px) and (max-width: 1279px) {
-  /* Keep dense desktop portals readable on smaller laptop/tablet widths. */
-  .max-w-7xl { padding-left: 1rem; padding-right: 1rem; }
+  .max-w-7xl {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
