@@ -210,9 +210,9 @@ export const PosView: React.FC<PosViewProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col lg:flex-row h-full min-h-0 overflow-hidden bg-slate-100 relative">
-      <div className={`flex-1 flex flex-col min-w-0 p-3 sm:p-4 overflow-hidden ${mobileTab === 'cart' ? 'hidden lg:flex' : 'flex'}`}>
-        <div className="lg:hidden flex bg-white p-1 rounded-xl border border-slate-200 mb-2.5 shadow-xs shrink-0">
+    <div className="yupos-pos-shell flex-1 flex flex-col lg:flex-row h-full min-h-0 overflow-hidden bg-slate-100 relative">
+      <div className={`yupos-pos-catalog flex-1 flex flex-col min-w-0 p-3 sm:p-4 overflow-hidden ${mobileTab === 'cart' ? 'hidden lg:flex' : 'flex'}`}>
+        <div className="yupos-pos-mobile-tabs lg:hidden flex bg-white p-1 rounded-xl border border-slate-200 mb-2.5 shadow-xs shrink-0">
           <button type="button" onClick={() => setMobileTab('catalog')} className={`flex-1 py-2 text-xs font-black rounded-lg ${mobileTab === 'catalog' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}>Katalog Produk & Jasa</button>
           <button type="button" onClick={() => setMobileTab('cart')} className={`flex-1 py-2 text-xs font-black rounded-lg flex items-center justify-center gap-1.5 ${mobileTab === 'cart' ? 'bg-blue-600 text-white' : 'text-slate-600'}`}><Receipt className="w-3.5 h-3.5" />Keranjang ({cart.reduce((s, i) => s + i.qty, 0)})</button>
         </div>
@@ -239,7 +239,7 @@ export const PosView: React.FC<PosViewProps> = ({
         </div>
       </div>
 
-      <div className={`w-full lg:w-[420px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col h-full shrink-0 shadow-xl overflow-hidden ${mobileTab === 'catalog' ? 'hidden lg:flex' : 'flex'}`}>
+      <div className={`yupos-pos-cart w-full lg:w-[420px] bg-white border-t lg:border-t-0 lg:border-l border-slate-200 flex flex-col h-full shrink-0 shadow-xl overflow-hidden ${mobileTab === 'catalog' ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-3.5 sm:p-4 border-b border-slate-200 bg-slate-50/90 shrink-0">
           {editingOrder && <div className="mb-2.5 p-2 bg-amber-100 border border-amber-300 rounded-xl flex items-center justify-between text-xs text-amber-950 font-black"><span>Mode Edit: #{editingOrder.id}</span>{onCancelEditOrder && <button type="button" onClick={onCancelEditOrder} className="px-2 py-0.5 bg-white text-blue-600 rounded-lg text-[10px] font-black border border-amber-300">Batal Edit</button>}</div>}
           <div className="flex items-center justify-between mb-3"><div className="flex items-center gap-2"><button type="button" onClick={() => setMobileTab('catalog')} className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700">← Menu</button><h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5"><Receipt className="w-4 h-4 text-blue-600" />{editingOrder ? `Rincian Edit: #${editingOrder.id}` : 'Keranjang Kasir'}</h3></div><span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[11px] font-extrabold">{cart.reduce((s, i) => s + i.qty, 0)} item</span></div>
