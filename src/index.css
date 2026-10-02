@@ -141,6 +141,45 @@ button, input, select, textarea { font-family: inherit; }
   .yupos-pos-catalog .grid { min-width: 0; }
 }
 
+@media (min-width: 768px) and (max-width: 1023px) {
+  /* Tablet POS: keep catalog and cart visible side-by-side, like a desktop POS. */
+  .yupos-pos-shell {
+    flex-direction: row !important;
+  }
+
+  .yupos-pos-mobile-tabs {
+    display: none !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-catalog {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    overflow: hidden;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart {
+    display: flex !important;
+    flex: 0 0 clamp(320px, 38vw, 390px) !important;
+    width: clamp(320px, 38vw, 390px) !important;
+    max-width: 45vw !important;
+    min-width: 0 !important;
+    border-top: 0 !important;
+    border-left: 1px solid rgb(226 232 240);
+    box-shadow: -8px 0 28px rgba(15, 23, 42, .08);
+  }
+
+  .yupos-pos-shell .yupos-pos-catalog .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .65rem;
+  }
+
+  .yupos-pos-shell .yupos-pos-catalog > .flex.flex-col.sm\\:flex-row {
+    gap: .55rem;
+  }
+}
+
 @media (min-width: 900px) and (max-width: 1023px) {
   /* Landscape / large tablet: show catalog + cart together. */
   .yupos-pos-shell { flex-direction: row !important; }
