@@ -269,6 +269,106 @@ button, input, select, textarea { font-family: inherit; }
   }
 }
 
+/* VistaTab / XPAD landscape compact POS tuning.
+   Keep the right cart visually dense without changing any feature logic. */
+@media (min-width: 768px) and (orientation: landscape) and (max-height: 900px) {
+  .yupos-pos-shell .yupos-pos-cart {
+    flex-basis: clamp(330px, 31vw, 390px) !important;
+    width: clamp(330px, 31vw, 390px) !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header {
+    padding: .65rem .7rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header > .space-y-2 {
+    gap: .4rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header .p-3 {
+    padding: .55rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header .space-y-2 {
+    gap: .4rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header input,
+  .yupos-pos-shell .yupos-pos-cart-header select {
+    min-height: 30px !important;
+    height: 30px !important;
+    padding-top: .35rem !important;
+    padding-bottom: .35rem !important;
+    font-size: 12px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header label {
+    font-size: 9px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header .text-xs {
+    font-size: 10px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header button {
+    min-height: 30px !important;
+    padding-top: .35rem !important;
+    padding-bottom: .35rem !important;
+  }
+
+  /* The table/position note is intentionally compact. */
+  .yupos-pos-shell .yupos-pos-cart-header > .space-y-2 > input:last-child {
+    min-height: 30px !important;
+    height: 30px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-items {
+    padding: .45rem .7rem !important;
+  }
+
+  /* Empty carts should not reserve a giant blank middle section. */
+  .yupos-pos-shell .yupos-pos-cart-items > .h-full {
+    height: auto !important;
+    min-height: 0 !important;
+    padding-top: .35rem !important;
+    padding-bottom: .35rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-items > .h-full svg {
+    width: 1.75rem !important;
+    height: 1.75rem !important;
+    margin-bottom: .2rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-items > .h-full p {
+    font-size: 10px !important;
+    margin-top: .15rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer {
+    padding: .55rem .7rem !important;
+    gap: .45rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer > button {
+    min-height: 32px !important;
+    padding: .4rem .55rem !important;
+    font-size: 10px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer .space-y-1\.5 {
+    gap: .25rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer .text-xl {
+    font-size: 1rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer .grid {
+    gap: .4rem !important;
+  }
+}
+
 /* Landscape tablets with shorter heights need compact, but never
    clipped, cart controls. */
 @media (min-width: 768px) and (orientation: landscape) and (max-height: 820px) {
