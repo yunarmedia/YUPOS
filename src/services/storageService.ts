@@ -55,7 +55,26 @@ function valuesMatchForFirestoreVerification(left: unknown, right: unknown): boo
 }
 
 function mergeSettings(saved: StoreSettings): StoreSettings {
-  return { ...defaultSettings, ...saved, portalPins: { ...defaultSettings.portalPins, ...(saved.portalPins || {}) }, categories: Array.isArray(saved.categories) ? saved.categories : [], staffRoles: Array.isArray(saved.staffRoles) ? saved.staffRoles : [], staffList: saved.staffList && typeof saved.staffList === 'object' ? saved.staffList : {} };
+  // Firestore stores transport metadata alongside settings. Never let those
+  // fields leak back into the StoreSettings object, otherwise server
+  // verification compares { ...settings, merchantId, updatedAt } against the
+  // submitted settings and falsely reports a mismatch after a successful save.
+  const { merchantId: _merchantId, updatedAt: _updatedAt, ...settingsOnly } = saved as StoreSettings & {
+    merchantId?: string;
+    updatedAt?: number;
+  };
+
+  return {
+    ...defaultSettings,
+    ...settingsOnly,
+    portalPins: {
+      ...defaultSettings.portalPins,
+      ...(settingsOnly.portalPins || {}),
+    },
+    categories: Array.isArray(settingsOnly.categories) ? settingsOnly.categories : [],
+    staffRoles: Array.isArray(settingsOnly.staffRoles) ? settingsOnly.staffRoles : [],
+    staffList: settingsOnly.staffList && typeof settingsOnly.staffList === 'object' ? settingsOnly.staffList : {},
+  };
 }
 
 const syncQueues = new Map<string, Promise<boolean>>();
