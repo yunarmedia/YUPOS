@@ -286,6 +286,140 @@ button, input, select, textarea { font-family: inherit; }
     padding-bottom: .75rem !important;
   }
 
+  /* Bottom-sheet cart for tablet: collapsed = customer + payment,
+     expanded = full transaction details. */
+  .yupos-pos-shell .yupos-pos-cart-sheet {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: 86dvh !important;
+    z-index: 45 !important;
+    border-top: 1px solid rgb(203 213 225) !important;
+    border-left: 0 !important;
+    border-radius: 18px 18px 0 0 !important;
+    box-shadow: 0 -12px 32px rgba(15, 23, 42, .16) !important;
+    transition: max-height 180ms ease !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed {
+    max-height: 265px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-expanded {
+    max-height: 86dvh !important;
+  }
+
+  .yupos-pos-shell .yupos-cart-expand-handle {
+    width: 100% !important;
+    min-height: 34px !important;
+    padding: .2rem 0 .35rem !important;
+    border: 0 !important;
+    background: transparent !important;
+    color: #475569 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: .35rem !important;
+    cursor: pointer !important;
+    font-size: 10px !important;
+    font-weight: 800 !important;
+    position: relative;
+  }
+
+  .yupos-pos-shell .yupos-cart-expand-line {
+    position: absolute;
+    top: .25rem;
+    left: 50%;
+    width: 42px;
+    height: 4px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transform: translateX(-50%);
+  }
+
+  .yupos-pos-shell .yupos-cart-expand-label {
+    margin-top: .2rem;
+  }
+
+  .yupos-pos-shell .yupos-cart-summary {
+    display: block !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-cart-summary,
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-items {
+    display: none !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-header {
+    overflow: visible !important;
+    max-height: none !important;
+    padding: .3rem .75rem .45rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-header > .flex.items-center.justify-between {
+    margin-bottom: .3rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-header > .space-y-2 {
+    gap: .3rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-header .p-3 {
+    padding: .45rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer {
+    border-top: 1px solid rgb(226 232 240) !important;
+    padding: .5rem .75rem calc(.5rem + env(safe-area-inset-bottom)) !important;
+    gap: .4rem !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer > button,
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer .yupos-cart-summary {
+    display: none !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer .grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .4rem !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer .grid button {
+    min-height: 36px !important;
+    padding: .4rem .5rem !important;
+    font-size: 10px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-expanded {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-expanded .yupos-pos-cart-header {
+    flex: 0 0 auto !important;
+    max-height: 230px !important;
+    overflow-y: auto !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-expanded .yupos-pos-cart-items {
+    flex: 1 1 auto !important;
+    min-height: 90px !important;
+    overflow-y: auto !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-expanded .yupos-pos-cart-footer {
+    flex: 0 0 auto !important;
+    max-height: 260px !important;
+    overflow-y: auto !important;
+  }
+
 }
 @media (max-width: 1023px) {
   .max-w-7xl {
