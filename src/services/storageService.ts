@@ -5,7 +5,14 @@ import { auth, db } from '../config/firebase';
 export const defaultSettings: StoreSettings = {
   businessType: 'custom', customBusinessTypeName: '', storeName: '', storeAddress: '', storePhone: '', footer: '', logoBase64: '',
   shift1Name: '', shift2Name: '', shift1Start: '10:00', shift1End: '13:00', shift2Start: '13:00', shift2End: '22:00', activeShift: '1', manualOverride: false,
-  portalPins: { admin: '', expenses: '', inventory: '', staff: '', settings: '', historyDeletePin: '', historyEditPin: '', historyCancelPin: '' },
+  portalPins: {
+    admin: '', pos: '', customers: '', revenue: '', extract: '', expenses: '',
+    inventory: '', staff: '', printer: '', settings: '', history: '',
+    historyDeletePin: '', historyEditPin: '', historyCancelPin: '',
+    productEditPin: '', productDeletePin: '', customerEditPin: '',
+    customerDeletePin: '', expenseEditPin: '', expenseDeletePin: '',
+    customPaymentPin: '',
+  },
   btAutoPrint: false, ppnEnabled: false, ppnRate: 11, categories: [], staffRoles: [], staffList: {},
 };
 
@@ -155,23 +162,12 @@ function reportSettingsSyncFailure(
     stage,
   } as SettingsSyncFailure;
 
-  console.error('YUPOS settings sync diagnostic:', failure);
+  console.error('YUPOS settings sync failed:', failure);
 
   try {
     onError?.(failure);
   } catch {
     // Diagnostic callbacks must never break persistence.
-  }
-
-  // Temporary diagnostic surface: the current UI only shows a generic toast.
-  // This exposes the real Firebase stage/code/message so the root cause can be fixed
-  // instead of repeatedly guessing at the generic "save failed" state.
-  try {
-    if (typeof window !== 'undefined') {
-      window.alert(`YUPOS FIREBASE DIAGNOSTIC\nStage: ${failure.stage}\nCode: ${failure.code}\nMessage: ${failure.message}`);
-    }
-  } catch {
-    // Ignore browsers that block modal dialogs.
   }
 }
 
@@ -187,14 +183,17 @@ export function syncConfigToFirebase(
       const previousMeta = readSettingsMeta(id);
       const updatedAt = Math.max(Date.now(), previousMeta.updatedAt + 1);
 
-      saveMerchantSettings(id, clean, true);
-      writeSettingsMeta(id, updatedAt);
-
       const settingsRef = doc(db, 'yupos_config', id, 'settings', 'data');
-      const payload = sanitizeFirestoreData({ ...clean, merchantId: id, updatedAt });
+      const payload = sanitizeFirestoreData({
+        ...clean,
+        merchantId: id,
+        updatedAt,
+      });
 
+      // Firebase is the commit point. Do not mutate the local cache until the
+      // server has accepted and verified the complete settings snapshot.
       try {
-        await setDoc(settingsRef, payload, { merge: true });
+        await setDoc(settingsRef, payload);
       } catch (writeError) {
         console.error('Firebase settings write failed:', writeError);
         reportSettingsSyncFailure(onError, writeError, 'write');
@@ -206,17 +205,20 @@ export function syncConfigToFirebase(
         if (!verifiedSnap.exists()) {
           throw new Error('Firestore settings document was not readable after write.');
         }
+
         const verified = verifiedSnap.data() as Record<string, unknown>;
-        for (const [key, value] of Object.entries(clean)) {
-          if (!valuesMatchForFirestoreVerification(verified[key], value)) {
-            throw new Error(`Firestore settings verification failed for field: ${key}`);
-          }
+        const verifiedSettings = mergeSettings(verified as StoreSettings);
+
+        if (!valuesMatchForFirestoreVerification(verifiedSettings, clean)) {
+          throw new Error('Firestore settings verification failed: verified snapshot differs from submitted settings.');
         }
+
         if (String(verified.merchantId || '') !== id) {
           throw new Error('Firestore settings verification failed: merchantId mismatch.');
         }
 
-        writeSettingsMeta(id, Number(verified.updatedAt) || updatedAt);
+        const verifiedUpdatedAt = Number(verified.updatedAt);
+        writeSettingsMeta(id, Number.isFinite(verifiedUpdatedAt) ? verifiedUpdatedAt : updatedAt);
       } catch (verifyError: any) {
         const code = String(verifyError?.code || '');
         const message = String(verifyError?.message || verifyError || 'Unknown verification error');
@@ -232,6 +234,8 @@ export function syncConfigToFirebase(
           return false;
         }
 
+        // A transient server-read failure does not invalidate a successful
+        // Firestore write. The local cache can safely commit the exact payload.
         console.warn('Firebase settings server verification deferred:', verifyError);
       }
 
@@ -251,11 +255,17 @@ export function syncProductsToFirebase(products: ProductItem[], merchantId: stri
     try {
       const id = requireMerchantId(merchantId);
       const clean = products.map(p => ({ ...p, merchantId: id, businessType }));
-      saveMerchantProducts(id, businessType, clean, true);
-      await setDoc(doc(db, 'yupos_catalog', id, businessType, 'products'), sanitizeFirestoreData({ items: clean, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true });
+      await setDoc(
+        doc(db, 'yupos_catalog', id, businessType, 'products'),
+        sanitizeFirestoreData({ items: clean, merchantId: id, businessType, updatedAt: Date.now() }),
+        { merge: true },
+      );
       saveMerchantProducts(id, businessType, clean, true);
       return true;
-    } catch (err) { console.error('Firebase products sync failed:', err); return false; }
+    } catch (err) {
+      console.error('Firebase products sync failed:', err);
+      return false;
+    }
   });
 }
 
@@ -264,11 +274,17 @@ export function syncOrdersToFirebase(orders: Order[], merchantId: string = '', b
     try {
       const id = requireMerchantId(merchantId);
       const normalized = normalizeOrderIds(dedupeOrders(orders.map(o => ({ ...o, merchantId: id, businessType }))));
-      saveMerchantOrders(id, businessType, normalized, true);
-      await setDoc(doc(db, 'yupos_transactions', id, businessType, 'orders'), sanitizeFirestoreData({ list: normalized, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true });
+      await setDoc(
+        doc(db, 'yupos_transactions', id, businessType, 'orders'),
+        sanitizeFirestoreData({ list: normalized, merchantId: id, businessType, updatedAt: Date.now() }),
+        { merge: true },
+      );
       saveMerchantOrders(id, businessType, normalized, true);
       return true;
-    } catch (err) { console.error('Firebase orders sync failed:', err); return false; }
+    } catch (err) {
+      console.error('Firebase orders sync failed:', err);
+      return false;
+    }
   });
 }
 
@@ -277,11 +293,17 @@ export function syncExpensesToFirebase(expenses: Expense[], merchantId: string =
     try {
       const id = requireMerchantId(merchantId);
       const clean = expenses.map(e => ({ ...e, merchantId: id, businessType }));
-      saveMerchantExpenses(id, businessType, clean, true);
-      await setDoc(doc(db, 'yupos_finances', id, businessType, 'expenses'), sanitizeFirestoreData({ list: clean, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true });
+      await setDoc(
+        doc(db, 'yupos_finances', id, businessType, 'expenses'),
+        sanitizeFirestoreData({ list: clean, merchantId: id, businessType, updatedAt: Date.now() }),
+        { merge: true },
+      );
       saveMerchantExpenses(id, businessType, clean, true);
       return true;
-    } catch (err) { console.error('Firebase expenses sync failed:', err); return false; }
+    } catch (err) {
+      console.error('Firebase expenses sync failed:', err);
+      return false;
+    }
   });
 }
 
@@ -290,10 +312,16 @@ export function syncPettyCashToFirebase(amount: number, merchantId: string = '',
     try {
       const id = requireMerchantId(merchantId);
       const cleanAmount = Number(amount) || 0;
-      saveMerchantPettyCash(id, businessType, cleanAmount, true);
-      await setDoc(doc(db, 'yupos_finances', id, businessType, 'pettyCash'), sanitizeFirestoreData({ amount: cleanAmount, merchantId: id, businessType, updatedAt: Date.now() }), { merge: true });
+      await setDoc(
+        doc(db, 'yupos_finances', id, businessType, 'pettyCash'),
+        sanitizeFirestoreData({ amount: cleanAmount, merchantId: id, businessType, updatedAt: Date.now() }),
+        { merge: true },
+      );
       saveMerchantPettyCash(id, businessType, cleanAmount, true);
       return true;
-    } catch (err) { console.error('Firebase petty cash sync failed:', err); return false; }
+    } catch (err) {
+      console.error('Firebase petty cash sync failed:', err);
+      return false;
+    }
   });
 }
