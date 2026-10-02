@@ -385,12 +385,11 @@ button, input, select, textarea { font-family: inherit; }
     overflow: visible !important;
   }
 
-  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer > button,
-  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer .yupos-cart-summary {
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer > .yupos-cart-summary {
     display: none !important;
   }
 
-  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer .grid {
+  .yupos-pos-shell .yupos-pos-cart-sheet.is-collapsed .yupos-pos-cart-footer > .grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: .4rem !important;
