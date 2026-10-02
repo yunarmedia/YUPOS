@@ -911,6 +911,7 @@ export default function App() {
         settings={settings}
         merchant={merchant}
         onLogout={handleLogout}
+        onSettingsUpdated={setSettings}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
