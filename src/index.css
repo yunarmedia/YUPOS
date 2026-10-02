@@ -199,6 +199,9 @@ button, input, select, textarea { font-family: inherit; }
     gap: .7rem;
   }
 
+  .yupos-pos-shell .yupos-pos-mobile-tabs { display: none !important; }
+  .yupos-pos-shell .yupos-pos-catalog { padding-bottom: 280px !important; }
+
   .yupos-pos-shell .yupos-pos-mobile-tabs {
     min-height: 42px;
   }
@@ -289,6 +292,8 @@ button, input, select, textarea { font-family: inherit; }
   /* Bottom-sheet cart for tablet: collapsed = customer + payment,
      expanded = full transaction details. */
   .yupos-pos-shell .yupos-pos-cart-sheet {
+    display: flex !important;
+    flex-direction: column !important;
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
