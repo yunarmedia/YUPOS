@@ -142,55 +142,13 @@ button, input, select, textarea { font-family: inherit; }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-  /* Tablet: keep the cart usable within the viewport instead of letting
-     the customer form push the payment controls below the screen. */
-  .yupos-pos-shell .yupos-pos-cart {
-    height: 100% !important;
-    min-height: 0 !important;
-    overflow: hidden !important;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-header {
-    flex: 0 1 auto !important;
-    max-height: 235px !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-items {
-    flex: 1 1 auto !important;
-    min-height: 70px !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-footer {
-    flex: 0 0 auto !important;
-    max-height: 315px !important;
-    min-height: 0 !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-header input,
-  .yupos-pos-shell .yupos-pos-cart-header select {
-    min-height: 34px !important;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-footer button {
-    min-height: 38px !important;
-  }
-
-  .yupos-pos-shell .yupos-pos-cart-footer .text-xl {
-    font-size: 1.05rem !important;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1023px) {
-  /* Tablet POS: keep catalog and cart visible side-by-side, like a desktop POS. */
+  /* Tablet POS: full-height split workspace.
+     The cart uses a fixed, practical width and a 3-row grid so the
+     customer section, item list, and payment footer never overlap. */
   .yupos-pos-shell {
     flex-direction: row !important;
+    height: 100% !important;
+    min-height: 0 !important;
   }
 
   .yupos-pos-mobile-tabs {
@@ -202,18 +160,53 @@ button, input, select, textarea { font-family: inherit; }
     flex: 1 1 auto !important;
     width: auto !important;
     min-width: 0 !important;
-    overflow: hidden;
+    height: 100% !important;
+    overflow: hidden !important;
   }
 
   .yupos-pos-shell .yupos-pos-cart {
-    display: flex !important;
-    flex: 0 0 clamp(320px, 38vw, 390px) !important;
-    width: clamp(320px, 38vw, 390px) !important;
-    max-width: 45vw !important;
-    min-width: 0 !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    flex: 0 0 clamp(400px, 31vw, 470px) !important;
+    width: clamp(400px, 31vw, 470px) !important;
+    max-width: none !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
     border-top: 0 !important;
     border-left: 1px solid rgb(226 232 240);
     box-shadow: -8px 0 28px rgba(15, 23, 42, .08);
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-items {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer {
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    padding-bottom: max(.75rem, env(safe-area-inset-bottom)) !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-header input,
+  .yupos-pos-shell .yupos-pos-cart-header select {
+    min-height: 34px !important;
+  }
+
+  .yupos-pos-shell .yupos-pos-cart-footer button {
+    min-height: 38px !important;
   }
 
   .yupos-pos-shell .yupos-pos-catalog .grid {
@@ -224,19 +217,6 @@ button, input, select, textarea { font-family: inherit; }
   .yupos-pos-shell .yupos-pos-catalog > .flex.flex-col.sm\\:flex-row {
     gap: .55rem;
   }
-}
-
-@media (min-width: 900px) and (max-width: 1023px) {
-  /* Landscape / large tablet: show catalog + cart together. */
-  .yupos-pos-shell { flex-direction: row !important; }
-  .yupos-pos-mobile-tabs { display: none !important; }
-  .yupos-pos-catalog,
-  .yupos-pos-cart { display: flex !important; }
-  .yupos-pos-catalog { flex: 1 1 auto; width: auto; }
-  .yupos-pos-cart { flex: 0 0 390px; width: 390px !important; max-width: 42vw; }
-  .yupos-pos-catalog .grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-  .yupos-pos-shell .yupos-pos-catalog { padding: .75rem; }
-  .yupos-pos-shell .yupos-pos-cart { box-shadow: -8px 0 28px rgba(15, 23, 42, .08); }
 }
 
 @media (max-width: 767px) {
