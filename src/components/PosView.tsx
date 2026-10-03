@@ -80,6 +80,7 @@ export const PosView: React.FC<PosViewProps> = ({
   }, [editingOrder]);
 
   const preset = BUSINESS_PRESETS[settings.businessType] || BUSINESS_PRESETS.barbershop;
+  const isFnb = settings.businessType === 'fnb';
 
   const categories = useMemo(() => {
     const set = new Set<string>(settings.categories || []);
@@ -185,19 +186,30 @@ export const PosView: React.FC<PosViewProps> = ({
   const handleCheckout = (status: 'selesai' | 'pending', paymentMethod: string) => {
     if (!cart.length) return;
     const name = customerName.trim();
-    const phone = customerPhone.trim();
-    if (!name || !phone) {
-      setCustomerError('Nama dan Nomor Telepon Customer wajib diisi!');
-      onShowToast?.('Nama & Nomor Telepon customer wajib diisi untuk transaksi!', 'error');
+    if (!name) {
+      setCustomerError('Nama Customer wajib diisi!');
+      onShowToast?.('Nama customer wajib diisi untuk transaksi!', 'error');
+      setMobileTab('cart');
+      return;
+    }
+    if (!isFnb && !customerPhone.trim()) {
+      setCustomerError('Nomor Telepon Customer wajib diisi!');
+      onShowToast?.('Nomor Telepon customer wajib diisi untuk transaksi!', 'error');
       setMobileTab('cart');
       return;
     }
     setCustomerError(null);
-    const code = customerCode || generateCustomerCode(name, phone);
-    const customerText = `${name} [${code}]${seatOrTableNote.trim() ? ` (${seatOrTableNote.trim()})` : ''}`;
-    onSaveOrder(status, paymentMethod, customerText, discountAmount, discountType, discountValue, {
-      name, phone, customerCode: code, isMember: isMember || registerAsMember, registerAsMember,
-    });
+    const customerText = isFnb
+      ? `${name}${seatOrTableNote.trim() ? ` (${seatOrTableNote.trim()})` : ''}`
+      : `${name} [${customerCode || generateCustomerCode(name, customerPhone)}]${seatOrTableNote.trim() ? ` (${seatOrTableNote.trim()})` : ''}`;
+    const customerDetails = isFnb ? undefined : {
+      name,
+      phone: customerPhone.trim(),
+      customerCode: customerCode || generateCustomerCode(name, customerPhone),
+      isMember: isMember || registerAsMember,
+      registerAsMember,
+    };
+    onSaveOrder(status, paymentMethod, customerText, discountAmount, discountType, discountValue, customerDetails);
     if (status === 'selesai') {
       setSelectedCustomer(null); setCustomerName(''); setCustomerPhone(''); setCustomerCode(''); setIsMember(false); setRegisterAsMember(false); setSeatOrTableNote(''); setSearchCustomerQuery('');
     }
@@ -245,7 +257,20 @@ export const PosView: React.FC<PosViewProps> = ({
           <div className="flex items-center justify-between mb-3"><div className="flex items-center gap-2"><button type="button" onClick={() => setMobileTab('catalog')} className="lg:hidden p-1.5 rounded-lg bg-slate-200 text-slate-700">← Menu</button><h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5"><Receipt className="w-4 h-4 text-blue-600" />{editingOrder ? `Rincian Edit: #${editingOrder.id}` : 'Keranjang Kasir'}</h3></div><span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[11px] font-extrabold">{cart.reduce((s, i) => s + i.qty, 0)} item</span></div>
 
           <div className="space-y-2">
-            {selectedCustomer ? <div className="p-3 bg-gradient-to-r from-blue-50 to-amber-50 rounded-xl border border-amber-200"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 flex-wrap"><span className="text-xs font-black text-slate-900">{selectedCustomer.name}</span>{selectedCustomer.isMember && <MembershipBadge size="sm" />}</div><div className="flex items-center gap-2 mt-1 text-[11px] text-slate-600"><span className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border">[{selectedCustomer.customerCode}]</span><span>📞 {selectedCustomer.phone}</span><span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-black text-[10px]">{selectedCustomer.visitCount}x</span></div></div><button type="button" onClick={handleClearCustomer} className="p-1 rounded-lg bg-white text-slate-400 border"><X className="w-3.5 h-3.5" /></button></div>{!selectedCustomer.isMember && <button type="button" onClick={() => setRegisterAsMember(!registerAsMember)} className={`mt-2 px-2.5 py-1 rounded-lg text-[10px] font-black border ${registerAsMember ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-amber-800 border-amber-300'}`}><Crown className="w-3 h-3 inline mr-1" />{registerAsMember ? '✓ Didaftarkan Member' : '⭐ Daftarkan Member'}</button>}</div> : <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200"><div className="relative" ref={customerSearchRef}><Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" /><input type="text" value={searchCustomerQuery} onChange={(e) => { setSearchCustomerQuery(e.target.value); setShowCustomerDropdown(true); }} onFocus={() => setShowCustomerDropdown(true)} placeholder="Cari customer lama (Nama / Kode Unik)..." className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" />{showCustomerDropdown && matchingCustomers.length > 0 && <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border shadow-lg z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">{matchingCustomers.map((c) => <div key={c.id} onClick={() => handleSelectCustomer(c)} className="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between"><div><div className="flex items-center gap-1.5"><span className="text-xs font-black">{c.name}</span>{c.isMember && <MembershipBadge size="sm" />}</div><div className="text-[10px] text-slate-500"><span className="font-mono font-bold text-blue-600">[{c.customerCode}]</span> {c.phone}</div></div><span className="text-[10px] font-black bg-slate-100 px-1.5 py-0.5 rounded">{c.visitCount}x</span></div>)}</div>}</div><div className="grid grid-cols-1 sm:grid-cols-2 gap-2"><div><label className="block text-[10px] font-extrabold mb-0.5"><User className="w-3 h-3 inline text-blue-600 mr-1" />Nama Customer *</label><input type="text" value={customerName} onChange={(e) => { setCustomerName(e.target.value); setCustomerError(null); }} placeholder="Nama pelanggan..." className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" /></div><div><label className="block text-[10px] font-extrabold mb-0.5"><Phone className="w-3 h-3 inline text-emerald-600 mr-1" />Nomor Telepon / WA *</label><input type="tel" value={customerPhone} onChange={(e) => { setCustomerPhone(e.target.value); setCustomerError(null); }} placeholder="081234567890" className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" /></div></div><div className="flex items-center justify-between gap-2 pt-1 border-t"><div className="text-[10px] text-slate-600"><Hash className="w-3 h-3 inline mr-1" />Kode Unik: <span className="font-mono font-black text-blue-600">{customerCode ? `[${customerCode}]` : '-'}</span></div><button type="button" onClick={() => setRegisterAsMember(!registerAsMember)} className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${registerAsMember ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-amber-800 border-amber-300'}`}><Crown className="w-3 h-3 inline mr-1" />{registerAsMember ? '✓ Daftar Member Aktif' : '⭐ Daftar Member'}</button></div></div>}
+            {isFnb ? (
+              <div className="bg-white p-3 rounded-xl border border-slate-200">
+                <label className="block text-[10px] font-extrabold mb-1"><User className="w-3 h-3 inline text-blue-600 mr-1" />Nama Customer *</label>
+                <input type="text" value={customerName} onChange={(e) => { setCustomerName(e.target.value); setCustomerError(null); }} placeholder="Nama pelanggan..." className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" />
+              </div>
+            ) : selectedCustomer ? (
+              <div className="p-3 bg-gradient-to-r from-blue-50 to-amber-50 rounded-xl border border-amber-200"><div className="flex items-start justify-between"><div><div className="flex items-center gap-2 flex-wrap"><span className="text-xs font-black text-slate-900">{selectedCustomer.name}</span>{selectedCustomer.isMember && <MembershipBadge size="sm" />}</div><div className="flex items-center gap-2 mt-1 text-[11px] text-slate-600"><span className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border">[{selectedCustomer.customerCode}]</span><span>📞 {selectedCustomer.phone}</span><span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded font-black text-[10px]">{selectedCustomer.visitCount}x</span></div></div><button type="button" onClick={handleClearCustomer} className="p-1 rounded-lg bg-white text-slate-400 border"><X className="w-3.5 h-3.5" /></button></div>{!selectedCustomer.isMember && <button type="button" onClick={() => setRegisterAsMember(!registerAsMember)} className={`mt-2 px-2.5 py-1 rounded-lg text-[10px] font-black border ${registerAsMember ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-amber-800 border-amber-300'}`}><Crown className="w-3 h-3 inline mr-1" />{registerAsMember ? '✓ Didaftarkan Member' : '⭐ Daftarkan Member'}</button>}</div>
+            ) : (
+              <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200">
+                <div className="relative" ref={customerSearchRef}><Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" /><input type="text" value={searchCustomerQuery} onChange={(e) => { setSearchCustomerQuery(e.target.value); setShowCustomerDropdown(true); }} onFocus={() => setShowCustomerDropdown(true)} placeholder="Cari customer lama (Nama / Kode Unik)..." className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" />{showCustomerDropdown && matchingCustomers.length > 0 && <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border shadow-lg z-50 max-h-48 overflow-y-auto divide-y divide-slate-100">{matchingCustomers.map((c) => <div key={c.id} onClick={() => handleSelectCustomer(c)} className="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between"><div><div className="flex items-center gap-1.5"><span className="text-xs font-black">{c.name}</span>{c.isMember && <MembershipBadge size="sm" />}</div><div className="text-[10px] text-slate-500"><span className="font-mono font-bold text-blue-600">[{c.customerCode}]</span> {c.phone}</div></div><span className="text-[10px] font-black bg-slate-100 px-1.5 py-0.5 rounded">{c.visitCount}x</span></div>)}</div>}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2"><div><label className="block text-[10px] font-extrabold mb-0.5"><User className="w-3 h-3 inline text-blue-600 mr-1" />Nama Customer *</label><input type="text" value={customerName} onChange={(e) => { setCustomerName(e.target.value); setCustomerError(null); }} placeholder="Nama pelanggan..." className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" /></div><div><label className="block text-[10px] font-extrabold mb-0.5"><Phone className="w-3 h-3 inline text-emerald-600 mr-1" />Nomor Telepon / WA *</label><input type="tel" value={customerPhone} onChange={(e) => { setCustomerPhone(e.target.value); setCustomerError(null); }} placeholder="081234567890" className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold" /></div></div>
+                <div className="flex items-center justify-between gap-2 pt-1 border-t"><div className="text-[10px] text-slate-600"><Hash className="w-3 h-3 inline mr-1" />Kode Unik: <span className="font-mono font-black text-blue-600">{customerCode ? `[${customerCode}]` : '-'}</span></div><button type="button" onClick={() => setRegisterAsMember(!registerAsMember)} className={`px-2.5 py-1 rounded-lg text-[10px] font-black border ${registerAsMember ? 'bg-amber-500 text-white border-amber-600' : 'bg-white text-amber-800 border-amber-300'}`}><Crown className="w-3 h-3 inline mr-1" />{registerAsMember ? '✓ Daftar Member Aktif' : '⭐ Daftar Member'}</button></div>
+              </div>
+            )}
             <input type="text" value={seatOrTableNote} onChange={(e) => setSeatOrTableNote(e.target.value)} placeholder={`Catatan posisi: ${preset.identifierLabel} (opsional)...`} className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold" />
             {customerError && <div className="p-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-1.5 text-[11px] font-bold text-red-700"><AlertCircle className="w-3.5 h-3.5" />{customerError}</div>}
           </div>
