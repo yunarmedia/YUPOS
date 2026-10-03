@@ -210,7 +210,7 @@ export default function App() {
     setOrders(loadMerchantOrders(currentMId, loadedSettings.businessType));
     setExpenses(loadMerchantExpenses(currentMId, loadedSettings.businessType));
     setPettyCash(loadMerchantPettyCash(currentMId, loadedSettings.businessType));
-    setCustomers(loadCustomers(currentMId));
+    setCustomers(loadedSettings.businessType === 'fnb' ? [] : loadCustomers(currentMId));
     setCart([]);
     setEditingOrder(null);
 
@@ -226,7 +226,7 @@ export default function App() {
       setOrders(loadMerchantOrders(currentMId, hydratedSettings.businessType));
       setExpenses(loadMerchantExpenses(currentMId, hydratedSettings.businessType));
       setPettyCash(loadMerchantPettyCash(currentMId, hydratedSettings.businessType));
-      setCustomers(loadCustomers(currentMId));
+      setCustomers(hydratedSettings.businessType === 'fnb' ? [] : loadCustomers(currentMId));
     })();
 
     return () => {
@@ -491,9 +491,9 @@ export default function App() {
       savedOrder = {
         ...editingOrder,
         customer: customerNote || editingOrder.customer || 'Pelanggan',
-        customerPhone: customerDetails?.phone || editingOrder.customerPhone,
-        customerCode: customerDetails?.customerCode || editingOrder.customerCode,
-        customerIsMember: customerDetails?.isMember ?? editingOrder.customerIsMember,
+        customerPhone: currentBType === 'fnb' ? undefined : (customerDetails?.phone || editingOrder.customerPhone),
+        customerCode: currentBType === 'fnb' ? undefined : (customerDetails?.customerCode || editingOrder.customerCode),
+        customerIsMember: currentBType === 'fnb' ? undefined : (customerDetails?.isMember ?? editingOrder.customerIsMember),
         items: [...cart],
         subtotal,
         discount,
@@ -518,9 +518,9 @@ export default function App() {
         time: timeStr,
         timestamp: Date.now(),
         customer: customerNote || 'Pelanggan',
-        customerPhone: customerDetails?.phone,
-        customerCode: customerDetails?.customerCode,
-        customerIsMember: customerDetails?.isMember,
+        customerPhone: currentBType === 'fnb' ? undefined : customerDetails?.phone,
+        customerCode: currentBType === 'fnb' ? undefined : customerDetails?.customerCode,
+        customerIsMember: currentBType === 'fnb' ? undefined : customerDetails?.isMember,
         items: [...cart],
         subtotal,
         discount,
@@ -543,8 +543,8 @@ export default function App() {
     setOrders(updated);
     }
 
-    // Record customer visit & persist to database
-    if (customerDetails && customerDetails.name && customerDetails.phone) {
+    // F&B transactions use only the typed customer name and never persist customer/membership data.
+    if (currentBType !== 'fnb' && customerDetails && customerDetails.name && customerDetails.phone) {
       const updatedCustomers = await recordCustomerVisit(
         customers,
         {
@@ -786,6 +786,10 @@ export default function App() {
     showToast('Modal awal kasir berhasil diperbarui!', 'success');
   };
 
+  useEffect(() => {
+    if (settings.businessType === 'fnb' && activeTab === 'customers') setActiveTab('pos');
+  }, [settings.businessType, activeTab]);
+
   // Customer Management Handlers
   const handleSaveCustomer = async (customerData: Omit<Customer, 'id'>, id?: string) => {
     const currentMId = requireMerchantId();
@@ -984,7 +988,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'customers' && (
+        {activeTab === 'customers' && settings.businessType !== 'fnb' && (
           <CustomerView
             customers={customers}
             onSaveCustomer={handleSaveCustomer}
