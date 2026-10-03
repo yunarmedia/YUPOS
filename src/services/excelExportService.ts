@@ -533,7 +533,8 @@ export function exportTreatmentSpreadsheet(
 export function exportMasterSpreadsheet(
   orders: Order[],
   expenses: Expense[],
-  filterLabel: string = 'Harian'
+  filterLabel: string = 'Harian',
+  businessType?: string
 ) {
   const wb = XLSX.utils.book_new();
 
@@ -582,6 +583,14 @@ export function exportMasterSpreadsheet(
   expRows.push([]);
   expRows.push(['GRAND TOTAL PENGELUARAN', totExp]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(expRows), 'Rincian Pengeluaran');
+
+  // F&B uses only income and expense extraction. Do not include Body Cloud
+  // or treatment/commission sheets for this business type.
+  if (businessType === 'fnb') {
+    const fileName = `YuPOS_FnB_Extract_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    return;
+  }
 
   // Sheet 3: Body Cloud 50-50
   const bcData = extractBodyCloudData(orders);
