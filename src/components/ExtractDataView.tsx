@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   FileSpreadsheet, 
   Download, 
@@ -51,6 +51,13 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
   const [endDate, setEndDate] = useState(todayStr);
   const [activeExtractTab, setActiveExtractTab] = useState<ExtractTab>('income');
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    if (settings.businessType === 'fnb' && (activeExtractTab === 'bodycloud' || activeExtractTab === 'treatment')) {
+      setActiveExtractTab('income');
+    }
+  }, [settings.businessType, activeExtractTab]);
+
 
   // Handle date preset change
   const handlePresetChange = (preset: 'today' | 'yesterday' | 'week' | 'month' | 'custom') => {
@@ -189,8 +196,8 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
 
   const handleExportMaster = () => {
     try {
-      exportMasterSpreadsheet(filteredOrders, filteredExpenses, filterLabel);
-      onShowToast('Rekap Lengkap 4-Sheet Excel berhasil diunduh (.xlsx)!', 'success');
+      exportMasterSpreadsheet(filteredOrders, filteredExpenses, filterLabel, settings.businessType);
+      onShowToast(settings.businessType === 'fnb' ? 'Rekap FnB 2-Sheet Excel berhasil diunduh (.xlsx)!' : 'Rekap Lengkap 4-Sheet Excel berhasil diunduh (.xlsx)!', 'success');
     } catch (e) {
       console.error(e);
       onShowToast('Gagal mengekspor rekap spreadsheet.', 'error');
@@ -211,8 +218,7 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
             </h2>
           </div>
           <p className="text-xs sm:text-sm text-emerald-100 font-medium max-w-2xl leading-relaxed">
-            Ekstrak data pemasukan, pengeluaran rinci, pembagian Body Cloud (Barber 50% - Owner 50%), 
-            dan insentif treatment karyawan (20%) langsung ke format spreadsheet Excel (.xlsx).
+            Ekstrak data pemasukan dan pengeluaran rinci langsung ke format spreadsheet Excel (.xlsx).
           </p>
         </div>
 
@@ -222,7 +228,7 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
           className="px-4 py-3 bg-white hover:bg-emerald-50 text-emerald-800 font-black rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-black/10 transition-all shrink-0 active:scale-95"
         >
           <Download className="w-4 h-4 text-emerald-600" />
-          <span>Unduh Rekap Lengkap (4 Sheet Sekaligus)</span>
+          <span>{settings.businessType === 'fnb' ? 'Unduh Rekap Lengkap (2 Sheet)' : 'Unduh Rekap Lengkap (4 Sheet Sekaligus)'}</span>
         </button>
       </div>
 
@@ -298,7 +304,7 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
       </div>
 
       {/* Navigation Sub-Tabs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+      <div className={`grid grid-cols-2 ${settings.businessType === 'fnb' ? 'lg:grid-cols-2' : 'lg:grid-cols-4'} gap-2.5`}>
         {/* Tab 1: Pemasukan */}
         <button
           type="button"
@@ -351,58 +357,64 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
           </div>
         </button>
 
-        {/* Tab 3: Body Cloud 50/50 */}
-        <button
-          type="button"
-          onClick={() => setActiveExtractTab('bodycloud')}
-          className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
-            activeExtractTab === 'bodycloud'
-              ? 'bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20'
-              : 'bg-white/70 border-slate-200 hover:bg-white text-slate-700'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Scissors className="w-4 h-4" />
-            </span>
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-              50% - 50%
-            </span>
-          </div>
-          <div className="mt-2">
-            <h4 className="text-xs font-black text-slate-900 leading-tight">3. Body Cloud (50/50)</h4>
-            <p className="text-[11px] font-extrabold text-blue-600 mt-0.5">
-              Rp {bodyCloudData.grandTotalOmzet.toLocaleString('id-ID')}
-            </p>
-          </div>
-        </button>
+        {settings.businessType !== 'fnb' && (
+          {/* Tab 3: Body Cloud 50/50 */}
+          <button
+            type="button"
+            onClick={() => setActiveExtractTab('bodycloud')}
+            className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+              activeExtractTab === 'bodycloud'
+                ? 'bg-white border-blue-500 shadow-md ring-2 ring-blue-500/20'
+                : 'bg-white/70 border-slate-200 hover:bg-white text-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                <Scissors className="w-4 h-4" />
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                50% - 50%
+              </span>
+            </div>
+            <div className="mt-2">
+              <h4 className="text-xs font-black text-slate-900 leading-tight">3. Body Cloud (50/50)</h4>
+              <p className="text-[11px] font-extrabold text-blue-600 mt-0.5">
+                Rp {bodyCloudData.grandTotalOmzet.toLocaleString('id-ID')}
+              </p>
+            </div>
+          </button>
 
-        {/* Tab 4: Treatment Insentif 20% */}
-        <button
-          type="button"
-          onClick={() => setActiveExtractTab('treatment')}
-          className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
-            activeExtractTab === 'treatment'
-              ? 'bg-white border-amber-500 shadow-md ring-2 ring-amber-500/20'
-              : 'bg-white/70 border-slate-200 hover:bg-white text-slate-700'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
-              <Award className="w-4 h-4" />
-            </span>
-            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-              Insentif 20%
-            </span>
-          </div>
-          <div className="mt-2">
-            <h4 className="text-xs font-black text-slate-900 leading-tight">4. Treatment Karyawan</h4>
-            <p className="text-[11px] font-extrabold text-amber-600 mt-0.5">
-              Insentif: Rp {treatmentData.grandTotalIncentive.toLocaleString('id-ID')}
-            </p>
-          </div>
-        </button>
+        )}
+
+        {settings.businessType !== 'fnb' && (
+          {/* Tab 4: Treatment Insentif 20% */}
+          <button
+            type="button"
+            onClick={() => setActiveExtractTab('treatment')}
+            className={`p-3.5 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+              activeExtractTab === 'treatment'
+                ? 'bg-white border-amber-500 shadow-md ring-2 ring-amber-500/20'
+                : 'bg-white/70 border-slate-200 hover:bg-white text-slate-700'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                <Award className="w-4 h-4" />
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                Insentif 20%
+              </span>
+            </div>
+            <div className="mt-2">
+              <h4 className="text-xs font-black text-slate-900 leading-tight">4. Treatment Karyawan</h4>
+              <p className="text-[11px] font-extrabold text-amber-600 mt-0.5">
+                Insentif: Rp {treatmentData.grandTotalIncentive.toLocaleString('id-ID')}
+              </p>
+            </div>
+          </button>
       </div>
+
+        )}
 
       {/* Active Tab View Details */}
 
