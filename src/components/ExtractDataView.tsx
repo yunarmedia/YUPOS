@@ -358,6 +358,7 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
         </button>
 
         {settings.businessType !== 'fnb' && (
+          <>
           {/* Tab 3: Body Cloud 50/50 */}
           <button
             type="button"
@@ -383,10 +384,11 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
               </p>
             </div>
           </button>
-
+          </>
         )}
 
         {settings.businessType !== 'fnb' && (
+          <>
           {/* Tab 4: Treatment Insentif 20% */}
           <button
             type="button"
@@ -412,9 +414,9 @@ export const ExtractDataView: React.FC<ExtractDataViewProps> = ({
               </p>
             </div>
           </button>
-      </div>
-
+          </>
         )}
+      </div>
 
       {/* Active Tab View Details */}
 
